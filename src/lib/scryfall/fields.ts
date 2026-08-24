@@ -1,0 +1,247 @@
+import type { OwnedCard } from '../../types';
+import { QueryError } from './tokenize';
+import type { Op } from './tokenize';
+
+export type Predicate = (card: OwnedCard) => boolean;
+
+function cmp(op: Op, a: number, b: number): boolean {
+  switch (op) {
+    case ':':
+    case '=': return a === b;
+    case '!=': return a !== b;
+    case '<': return a < b;
+    case '>': return a > b;
+    case '<=': return a <= b;
+    case '>=': return a >= b;
+  }
+}
+
+function numericField(get: (c: OwnedCard) => number | null) {
+  return (op: Op, value: string): Predicate => {
+    const n = Number(value);
+    if (Number.isNaN(n)) throw new QueryError(`Expected a number, got "${value}"`);
+    return (c) => {
+      const v = get(c);
+      return v !== null && cmp(op, v, n);
+    };
+  };
+}
+
+function textContainsField(get: (c: OwnedCard) => string | null) {
+  return (op: Op, value: string): Predicate => {
+    if (op !== ':' && op !== '=') throw new QueryError(`Operator "${op}" not valid for text fields`);
+    const needle = value.toLowerCase();
+    return (c) => {
+      let hay = get(c)?.toLowerCase() ?? '';
+      return hay.includes(needle);
+    };
+  };
+}
+
+// ---- colors ----
+
+const COLOR_LETTERS = ['w', 'u', 'b', 'r', 'g'] as const;
+const COLOR_NAMES: Record<string, string> = {
+  white: 'w', blue: 'u', black: 'b', red: 'r', green: 'g',
+};
+
+function parseColorValue(value: string): Set<string> | 'colorless' | 'multicolor' {
+  const v = value.toLowerCase();
+  if (v === 'c' || v === 'colorless') return 'colorless';
+  if (v === 'm' || v === 'multicolor' || v === 'multi') return 'multicolor';
+  if (COLOR_NAMES[v]) return new Set([COLOR_NAMES[v]]);
+  const set = new Set<string>();
+  for (const ch of v) {
+    if (!(COLOR_LETTERS as readonly string[]).includes(ch)) {
+      throw new QueryError(`Unknown color "${ch}" in "${value}"`);
+    }
+    set.add(ch);
+  }
+  return set;
+}
+
+function setCompare(op: Op, card: Set<string>, query: Set<string>): boolean {
+  const superset = [...query].every((x) => card.has(x));
+  const subset = [...card].every((x) => query.has(x));
+  switch (op) {
+    case '=': return superset && subset;
+    case '!=': return !(superset && subset);
+    case '>=': return superset;
+    case '<=': return subset;
+    case '>': return superset && card.size > query.size;
+    case '<': return subset && card.size < query.size;
+    case ':': return superset; // callers override for identity
+  }
+}
+
+function colorField(get: (c: OwnedCard) => string[] | null, colonMeans: '>=' | '<=') {
+  return (op: Op, value: string): Predicate => {
+    const parsed = parseColorValue(value);
+    const effOp: Op = op === ':' ? colonMeans : op;
+    return (c) => {
+      const cardColors = new Set((get(c) ?? []).map((x) => x.toLowerCase()));
+      if (parsed === 'colorless') return cardColors.size === 0;
+      if (parsed === 'multicolor') return cardColors.size >= 2;
+      return setCompare(effOp, cardColors, parsed);
+    };
+  };
+}
+
+// ---- rarity ----
+
+const RARITY_ORDER: Record<string, number> = {
+  common: 0, uncommon: 1, rare: 2, mythic: 3, special: 4, bonus: 5,
+};
+const RARITY_ALIAS: Record<string, string> = {
+  c: 'common', u: 'uncommon', r: 'rare', m: 'mythic', mythic_rare: 'mythic',
+};
+
+function rarityField(op: Op, value: string): Predicate {
+  const name = RARITY_ALIAS[value.toLowerCase()] ?? value.toLowerCase();
+  const rank = RARITY_ORDER[name];
+  if (rank === undefined) throw new QueryError(`Unknown rarity "${value}"`);
+  return (c) => {
+    const r = (c.scryfall?.rarity ?? c.rarity)?.toLowerCase();
+    if (!r || RARITY_ORDER[r] === undefined) return false;
+    return cmp(op, RARITY_ORDER[r], rank);
+  };
+}
+
+// ---- price ----
+
+/** Price of the owned copy: foil copies use usd_foil when available. */
+export function ownedPrice(c: OwnedCard): number | null {
+  const s = c.scryfall;
+  if (!s) return c.purchase_price;
+  const isFoil = c.foil !== null && c.foil !== 'normal';
+  if (isFoil) return s.usd_foil ?? s.usd ?? c.purchase_price;
+  return s.usd ?? s.usd_foil ?? c.purchase_price;
+}
+
+// ---- is: / not: ----
+
+const IS_PREDICATES: Record<string, Predicate> = {
+  foil: (c) => c.foil !== null && c.foil !== 'normal',
+  nonfoil: (c) => c.foil === null || c.foil === 'normal',
+  etched: (c) => c.foil === 'etched',
+  altered: (c) => c.altered,
+  misprint: (c) => c.misprint,
+  dfc: (c) => ['transform', 'modal_dfc', 'double_faced_token'].includes(c.scryfall?.layout ?? ''),
+  land: (c) => (c.scryfall?.type_line ?? '').toLowerCase().includes('land'),
+  creature: (c) => (c.scryfall?.type_line ?? '').toLowerCase().includes('creature'),
+  commander: (c) => {
+    const type = (c.scryfall?.type_line ?? '').toLowerCase();
+    const oracle = (c.scryfall?.oracle_text ?? '').toLowerCase();
+    return (type.includes('legendary') && type.includes('creature'))
+      || oracle.includes('can be your commander');
+  },
+};
+
+function isField(op: Op, value: string): Predicate {
+  if (op !== ':' && op !== '=') throw new QueryError(`Operator "${op}" not valid for is:`);
+  const pred = IS_PREDICATES[value.toLowerCase()];
+  if (!pred) throw new QueryError(`Unknown is: value "${value}"`);
+  return pred;
+}
+
+// ---- pow/tou/loy: '*' and other non-numerics never match numeric compares ----
+
+function statField(get: (c: OwnedCard) => string | null) {
+  return (op: Op, value: string): Predicate => {
+    const n = Number(value);
+    if (Number.isNaN(n)) throw new QueryError(`Expected a number, got "${value}"`);
+    return (c) => {
+      const raw = get(c);
+      if (raw === null || raw === undefined) return false;
+      const v = Number(raw);
+      if (Number.isNaN(v)) return false; // '*', '1+*', etc.
+      return cmp(op, v, n);
+    };
+  };
+}
+
+// ---- registry ----
+
+type FieldBuilder = (op: Op, value: string) => Predicate;
+
+const oracleField = (op: Op, value: string): Predicate => {
+  if (op !== ':' && op !== '=') throw new QueryError(`Operator "${op}" not valid for oracle text`);
+  const needle = value.toLowerCase();
+  return (c) => {
+    const s = c.scryfall;
+    if (!s?.oracle_text) return false;
+    // Scryfall's "~" placeholder expands to the card's own name
+    const cardName = (s.name ?? c.card_name).toLowerCase();
+    return s.oracle_text.toLowerCase().includes(needle.replaceAll('~', cardName));
+  };
+};
+
+const manaField = (op: Op, value: string): Predicate => {
+  if (op !== ':' && op !== '=') throw new QueryError(`Operator "${op}" not valid for mana cost`);
+  const needle = value.toLowerCase();
+  return (c) => (c.scryfall?.mana_cost ?? '').toLowerCase().includes(needle);
+};
+
+const setField = (op: Op, value: string): Predicate => {
+  if (op !== ':' && op !== '=') throw new QueryError(`Operator "${op}" not valid for set`);
+  const code = value.toLowerCase();
+  return (c) => (c.scryfall?.set_code ?? c.set_code ?? '').toLowerCase() === code;
+};
+
+const langField = (op: Op, value: string): Predicate => {
+  if (op !== ':' && op !== '=') throw new QueryError(`Operator "${op}" not valid for lang`);
+  const code = value.toLowerCase();
+  return (c) => (c.language ?? '').toLowerCase() === code;
+};
+
+const REGISTRY: Record<string, FieldBuilder> = {
+  t: textContainsField((c) => c.scryfall?.type_line ?? null),
+  type: textContainsField((c) => c.scryfall?.type_line ?? null),
+  o: oracleField,
+  oracle: oracleField,
+  c: colorField((c) => c.scryfall?.colors ?? null, '>='),
+  color: colorField((c) => c.scryfall?.colors ?? null, '>='),
+  id: colorField((c) => c.scryfall?.color_identity ?? null, '<='),
+  identity: colorField((c) => c.scryfall?.color_identity ?? null, '<='),
+  m: manaField,
+  mana: manaField,
+  cmc: numericField((c) => c.scryfall?.cmc ?? null),
+  mv: numericField((c) => c.scryfall?.cmc ?? null),
+  pow: statField((c) => c.scryfall?.power ?? null),
+  power: statField((c) => c.scryfall?.power ?? null),
+  tou: statField((c) => c.scryfall?.toughness ?? null),
+  toughness: statField((c) => c.scryfall?.toughness ?? null),
+  loy: statField((c) => c.scryfall?.loyalty ?? null),
+  loyalty: statField((c) => c.scryfall?.loyalty ?? null),
+  r: rarityField,
+  rarity: rarityField,
+  s: setField,
+  set: setField,
+  e: setField,
+  usd: numericField(ownedPrice),
+  price: numericField(ownedPrice),
+  is: isField,
+  not: (op, value) => {
+    const pred = isField(op, value);
+    return (c) => !pred(c);
+  },
+  lang: langField,
+  language: langField,
+  qty: numericField((c) => c.quantity),
+  quantity: numericField((c) => c.quantity),
+  loc: textContainsField((c) => c.binder_name),
+  binder: textContainsField((c) => c.binder_name),
+  location: textContainsField((c) => c.binder_name),
+  name: textContainsField((c) => c.scryfall?.name ?? c.card_name),
+};
+
+export function buildFieldPredicate(field: string, op: Op, value: string): Predicate {
+  const builder = REGISTRY[field];
+  if (!builder) throw new QueryError(`Unknown search field "${field}"`);
+  return builder(op, value);
+}
+
+export function namePredicate(value: string): Predicate {
+  const needle = value.toLowerCase();
+  return (c) => (c.scryfall?.name ?? c.card_name).toLowerCase().includes(needle);
+}
