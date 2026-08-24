@@ -114,6 +114,15 @@ describe('planMove', () => {
     expect(plan.transfers).toEqual([{ sourceRow: dfc, qty: 1 }]);
   });
 
+  it('matches Moxfield single-slash DFC names against // card names', () => {
+    const dfc = row({ name: 'Virtue of Strength // Garenbrig Growth', quantity: 1 });
+    const plan = planMove(
+      [line({ name: 'Virtue of Strength / Garenbrig Growth', quantity: 1 })],
+      [dfc],
+    );
+    expect(plan.transfers).toEqual([{ sourceRow: dfc, qty: 1 }]);
+  });
+
   it('passes malformed entries through to the report', () => {
     const plan = planMove([], [], [{ line: 3, reason: 'nope' }]);
     expect(plan.report.malformed).toEqual([{ line: 3, reason: 'nope' }]);

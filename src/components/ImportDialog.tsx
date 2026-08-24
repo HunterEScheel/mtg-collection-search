@@ -20,6 +20,7 @@ export function ImportDialog({ locations, onDone, onClose }: Props) {
   const [mode, setMode] = useState<ImportMode>(locations.length === 0 ? 'new' : 'update');
   const [name, setName] = useState('');
   const [targetId, setTargetId] = useState(locations[0]?.id ?? '');
+  const [pasted, setPasted] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
@@ -28,12 +29,15 @@ export function ImportDialog({ locations, onDone, onClose }: Props) {
 
   async function run() {
     const file = fileRef.current?.files?.[0];
-    if (!file) { setError('Choose a CSV file first'); return; }
+    if (!file && pasted.trim() === '') {
+      setError('Choose a file or paste a decklist first');
+      return;
+    }
     setBusy(true);
     setError(null);
     setReport(null);
     try {
-      const text = await file.text();
+      const text = pasted.trim() !== '' ? pasted : await file!.text();
       const { locationId, report } = await importCollectionCsv(text, {
         mode,
         newLocationName: name,
@@ -53,7 +57,7 @@ export function ImportDialog({ locations, onDone, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-md space-y-4 rounded-xl bg-zinc-900 p-6 ring-1 ring-zinc-700">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Import CSV into a Location</h2>
+          <h2 className="text-lg font-semibold">Import Cards into a Location</h2>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-100">✕</button>
         </div>
 
@@ -99,12 +103,23 @@ export function ImportDialog({ locations, onDone, onClose }: Props) {
 
         {mode === 'update' && (
           <p className="text-xs text-zinc-500">
-            Matching cards are set to the CSV's quantities (a re-sync, not an add); cards not in
-            the CSV are left alone.
+            Matching cards are set to the imported quantities (a re-sync, not an add); cards not
+            in the import are left alone.
           </p>
         )}
 
-        <input ref={fileRef} type="file" accept=".csv,text/csv" className="w-full text-sm" />
+        <input ref={fileRef} type="file" accept=".csv,.txt,text/csv,text/plain" className="w-full text-sm" />
+
+        <div className="space-y-1">
+          <p className="text-xs text-zinc-500">…or paste a CSV / Moxfield decklist:</p>
+          <textarea
+            value={pasted}
+            onChange={(e) => setPasted(e.target.value)}
+            placeholder={'1 Sol Ring (M3C) 305\n23 Forest (UND) 95\n1 Roaming Throne (LCI) 344 *F*'}
+            rows={5}
+            className="w-full rounded-md bg-zinc-800 px-3 py-2 font-mono text-xs ring-1 ring-zinc-700"
+          />
+        </div>
 
         {progress && busy && (
           <p className="text-sm text-zinc-400">

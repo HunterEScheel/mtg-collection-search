@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseManaBoxCsv } from './parse';
+import { parseCollectionText, parseDecklist, parseManaBoxCsv } from './parse';
 
 const HEADER =
   'Binder Name,Binder Type,Name,Set code,Set name,Collector number,Foil,Rarity,Quantity,ManaBox ID,Scryfall ID,Purchase price,Misprint,Altered,Condition,Language,Purchase price currency,Added';
@@ -95,5 +95,52 @@ describe('parseManaBoxCsv', () => {
 
   it('rejects unrecognized CSVs', () => {
     expect(() => parseManaBoxCsv('a,b,c\n1,2,3')).toThrow(/unrecognized csv format/i);
+  });
+});
+
+describe('parseDecklist', () => {
+  it('parses Moxfield decklist lines into normalized rows', () => {
+    const { format, rows, malformed } = parseDecklist(
+      [
+        "1 Ashnod's Transmogrant (5ED) 350",
+        '23 Forest (UND) 95',
+        '1 Clamavus (40K) 90',
+        '1 Roaming Throne (LCI) 344 *F*',
+        '1 Virtue of Strength / Garenbrig Growth (WOE) 284 *F*',
+      ].join('\n'),
+    );
+    expect(format).toBe('Moxfield Decklist');
+    expect(malformed).toEqual([]);
+    expect(rows).toHaveLength(5);
+    expect(rows[0]).toMatchObject({
+      card_name: "Ashnod's Transmogrant", set_code: '5ed', collector_number: '350',
+      quantity: 1, foil: 'normal', scryfall_id: null,
+    });
+    expect(rows[1]).toMatchObject({ card_name: 'Forest', set_code: 'und', quantity: 23 });
+    expect(rows[2]).toMatchObject({ set_code: '40k', collector_number: '90' });
+    expect(rows[3]).toMatchObject({ card_name: 'Roaming Throne', foil: 'foil' });
+    // Moxfield's single-slash DFC separator is normalized to Scryfall's `//`.
+    expect(rows[4]).toMatchObject({
+      card_name: 'Virtue of Strength // Garenbrig Growth',
+      set_code: 'woe', collector_number: '284', foil: 'foil',
+    });
+  });
+
+  it('throws when nothing parses', () => {
+    expect(() => parseDecklist('')).toThrow(/no valid decklist lines/i);
+  });
+});
+
+describe('parseCollectionText', () => {
+  it('routes CSV headers to the CSV parser', () => {
+    const { format } = parseCollectionText(csv);
+    expect(format).toBe('ManaBox');
+  });
+
+  it('routes plain lists to the decklist parser', () => {
+    const { format, rows } = parseCollectionText('2 Lightning Bolt (2XM) 123\n1 Sol Ring');
+    expect(format).toBe('Moxfield Decklist');
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({ card_name: 'Sol Ring', quantity: 1, set_code: null });
   });
 });

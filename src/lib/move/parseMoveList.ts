@@ -13,7 +13,8 @@ export interface ParsedMoveList {
 const LINE_RE =
   /^(?:(\d+)x?\s+)?(.+?)(?:\s+\(([A-Za-z0-9]{2,6})\)(?:\s+(\S+))?)?(?:\s+\*(F|E)\*)?$/i;
 
-function parseTextLines(text: string): ParsedMoveList {
+/** Parse Moxfield/Arena-style decklist text lines (no CSV sniffing). */
+export function parseDecklistLines(text: string): ParsedMoveList {
   const lines: MoveLine[] = [];
   const malformed: { line: number; reason: string }[] = [];
 
@@ -69,5 +70,5 @@ export function parseMoveList(text: string): ParsedMoveList {
       };
     }
   }
-  return parseTextLines(text);
+  return parseDecklistLines(text);
 }

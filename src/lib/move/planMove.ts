@@ -2,9 +2,13 @@ import type { MoveLine, MovePlan, OwnedCard, Transfer } from '../../types';
 
 const isFoilRow = (c: OwnedCard) => c.foil !== null && c.foil !== 'normal';
 
+// Moxfield decklists separate DFC faces with " / ", Scryfall with " // ".
+const normalizeName = (name: string) =>
+  name.toLowerCase().replace(/\s+\/{1,2}\s+/g, ' // ').trim();
+
 function nameMatches(line: MoveLine, c: OwnedCard): boolean {
-  const owned = (c.scryfall?.name ?? c.card_name).toLowerCase();
-  const wanted = line.name.toLowerCase();
+  const owned = normalizeName(c.scryfall?.name ?? c.card_name);
+  const wanted = normalizeName(line.name);
   if (owned === wanted) return true;
   // DFC: allow matching by front face on either side.
   const ownedFront = owned.split('//')[0].trim();
