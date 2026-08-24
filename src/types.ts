@@ -68,7 +68,10 @@ export interface ImportProgress {
 }
 
 export interface ImportReport {
+  format: string;
   imported: number;
   malformedRows: { line: number; reason: string }[];
   unresolvedScryfallIds: string[];
+  /** Cards from id-less formats that could not be matched on Scryfall. */
+  unresolvedNames: string[];
 }

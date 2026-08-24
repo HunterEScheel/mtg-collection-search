@@ -47,7 +47,53 @@ describe('parseManaBoxCsv', () => {
     expect(malformed[0].line).toBe(3);
   });
 
-  it('rejects non-ManaBox CSVs', () => {
-    expect(() => parseManaBoxCsv('a,b,c\n1,2,3')).toThrow(/missing column/i);
+  it('detects Moxfield format and normalizes fields', () => {
+    const mox = [
+      '"Count","Tradelist Count","Name","Edition","Condition","Language","Foil","Tags","Last Modified","Collector Number","Alter","Proxy","Purchase Price"',
+      '"2","0","Lightning Bolt","2x2","Near Mint","English","foil","","2024-01-01","117","False","False","1.50"',
+    ].join('\n');
+    const { format, rows: r } = parseManaBoxCsv(mox);
+    expect(format).toBe('Moxfield');
+    expect(r[0]).toMatchObject({
+      card_name: 'Lightning Bolt', set_code: '2x2', collector_number: '117',
+      quantity: 2, foil: 'foil', condition: 'near_mint', language: 'en',
+      purchase_price: 1.5, scryfall_id: null,
+    });
+  });
+
+  it('detects Dragon Shield format', () => {
+    const ds = [
+      'Folder Name,Quantity,Trade Quantity,Card Name,Set Code,Set Name,Card Number,Condition,Printing,Language,Price Bought,Date Bought,LOW,MID,MARKET',
+      'Binder A,3,0,Sol Ring,c21,Commander 2021,263,NearMint,Normal,English,1.00,2024-05-01,0.9,1.2,1.1',
+    ].join('\n');
+    const { format, rows: r } = parseManaBoxCsv(ds);
+    expect(format).toBe('Dragon Shield');
+    expect(r[0]).toMatchObject({
+      card_name: 'Sol Ring', binder_name: 'Binder A', set_code: 'c21',
+      collector_number: '263', quantity: 3, foil: 'normal',
+      condition: 'near_mint', language: 'en', purchase_price: 1,
+    });
+  });
+
+  it('detects TCGplayer format', () => {
+    const tcg = [
+      'Quantity,Name,Simple Name,Set,Card Number,Set Code,Printing,Condition,Rarity,Product ID,SKU',
+      '1,Counterspell,Counterspell,Mystical Archive,267,sta,Foil,Near Mint,Rare,1111,2222',
+    ].join('\n');
+    const { format, rows: r } = parseManaBoxCsv(tcg);
+    expect(format).toBe('TCGplayer');
+    expect(r[0]).toMatchObject({
+      card_name: 'Counterspell', set_code: 'sta', collector_number: '267',
+      foil: 'foil', rarity: 'rare', condition: 'near_mint',
+    });
+  });
+
+  it('still detects ManaBox first', () => {
+    const { format } = parseManaBoxCsv(csv);
+    expect(format).toBe('ManaBox');
+  });
+
+  it('rejects unrecognized CSVs', () => {
+    expect(() => parseManaBoxCsv('a,b,c\n1,2,3')).toThrow(/unrecognized csv format/i);
   });
 });

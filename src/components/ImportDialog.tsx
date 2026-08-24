@@ -54,7 +54,7 @@ export function ImportDialog({ collections, currentCollectionId, onDone, onClose
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-md space-y-4 rounded-xl bg-zinc-900 p-6 ring-1 ring-zinc-700">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Import ManaBox CSV</h2>
+          <h2 className="text-lg font-semibold">Import Collection CSV</h2>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-100">✕</button>
         </div>
 
@@ -109,7 +109,16 @@ export function ImportDialog({ collections, currentCollectionId, onDone, onClose
 
         {report && (
           <div className="space-y-1 rounded-md bg-zinc-800 p-3 text-sm">
-            <p className="text-emerald-400">Imported {report.imported} card rows.</p>
+            <p className="text-emerald-400">
+              Imported {report.imported} card rows ({report.format} format).
+            </p>
+            {report.unresolvedNames.length > 0 && (
+              <p className="text-amber-400">
+                {report.unresolvedNames.length} card(s) not matched on Scryfall and skipped:
+                {' '}{report.unresolvedNames.slice(0, 5).join('; ')}
+                {report.unresolvedNames.length > 5 ? '…' : ''}
+              </p>
+            )}
             {report.malformedRows.length > 0 && (
               <p className="text-amber-400">
                 Skipped {report.malformedRows.length} malformed row(s):

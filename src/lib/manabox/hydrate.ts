@@ -81,6 +81,63 @@ export function flattenCard(card: ScryfallApiCard) {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+type Identifier =
+  | { set: string; collector_number: string }
+  | { name: string; set?: string }
+  | { name: string };
+
+/**
+ * Resolve Scryfall printing ids for rows that lack one, using set+collector number
+ * (exact printing) with a name(+set) fallback. Returns a key -> id map; the same
+ * keys are produced by `resolutionKeys`. Also caches fetched cards.
+ */
+export async function resolveScryfallIds(
+  identifiers: { key: string; identifier: Identifier }[],
+  onProgress?: (current: number, total: number) => void,
+): Promise<Map<string, string>> {
+  const resolved = new Map<string, string>();
+  for (let i = 0; i < identifiers.length; i += BATCH) {
+    const chunk = identifiers.slice(i, i + BATCH);
+    const res = await fetch(SCRYFALL_COLLECTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifiers: chunk.map((c) => c.identifier) }),
+    });
+    if (!res.ok) throw new Error(`Scryfall request failed: HTTP ${res.status}`);
+    const payload = (await res.json()) as { data: ScryfallApiCard[] };
+
+    // Map results back by set+collector number and by name.
+    const bySetCn = new Map<string, ScryfallApiCard>();
+    const byName = new Map<string, ScryfallApiCard>();
+    for (const card of payload.data) {
+      const raw = card as ScryfallApiCard & { collector_number?: string };
+      if (card.set && raw.collector_number) {
+        bySetCn.set(`${card.set.toLowerCase()}:${raw.collector_number.toLowerCase()}`, card);
+      }
+      byName.set(card.name.toLowerCase(), card);
+      // front-face name of DFCs ("A // B" -> "a")
+      const front = card.name.split('//')[0].trim().toLowerCase();
+      if (front) byName.set(front, card);
+    }
+    for (const { key, identifier } of chunk) {
+      let card: ScryfallApiCard | undefined;
+      if ('collector_number' in identifier) {
+        card = bySetCn.get(`${identifier.set.toLowerCase()}:${identifier.collector_number.toLowerCase()}`);
+      }
+      if (!card && 'name' in identifier) card = byName.get(identifier.name.toLowerCase());
+      if (card) resolved.set(key, card.id);
+    }
+
+    if (payload.data.length > 0) {
+      const { error } = await supabase.from('scryfall_cards').upsert(payload.data.map(flattenCard));
+      if (error) throw new Error(`Saving card data failed: ${error.message}`);
+    }
+    onProgress?.(Math.min(i + BATCH, identifiers.length), identifiers.length);
+    if (i + BATCH < identifiers.length) await sleep(RATE_LIMIT_MS);
+  }
+  return resolved;
+}
+
 /** Which of these ids are already in the shared scryfall_cards cache? */
 async function findCachedIds(ids: string[]): Promise<Set<string>> {
   const cached = new Set<string>();
