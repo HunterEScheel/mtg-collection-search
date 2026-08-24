@@ -59,7 +59,7 @@ function card(over: Partial<OwnedCard> & { name: string; s?: Partial<ScryfallCar
 const FIXTURE: OwnedCard[] = [
   card({ name: 'Lightning Bolt', s: { type_line: 'Instant', colors: ['R'], color_identity: ['R'], cmc: 1, oracle_text: 'Lightning Bolt deals 3 damage to any target.', rarity: 'common', usd: 1.5, mana_cost: '{R}' }, quantity: 4 }),
   card({ name: 'Grizzly Bears', s: { type_line: 'Creature — Bear', colors: ['G'], color_identity: ['G'], cmc: 2, power: '2', toughness: '2', rarity: 'common', usd: 0.1 }, quantity: 2 }),
-  card({ name: 'Goblin Guide', s: { type_line: 'Creature — Goblin Scout', colors: ['R'], color_identity: ['R'], cmc: 1, power: '2', toughness: '2', rarity: 'rare', usd: 3.2 }, quantity: 1, binder_name: 'USD>20' }),
+  card({ name: 'Goblin Guide', s: { type_line: 'Creature — Goblin Scout', colors: ['R'], color_identity: ['R'], cmc: 1, power: '2', toughness: '2', rarity: 'rare', usd: 3.2, oracle_text: 'Haste\nWhenever Goblin Guide attacks, defending player reveals the top card of their library.', keywords: ['Haste'] }, quantity: 1, binder_name: 'USD>20' }),
   card({ name: 'Aurelia, Exemplar of Justice', s: { type_line: 'Legendary Creature — Angel', colors: ['R', 'W'], color_identity: ['R', 'W'], cmc: 4, power: '2', toughness: '5', rarity: 'mythic', usd: 4.9, oracle_text: 'Mentor.' }, quantity: 1, binder_name: 'USD>20', foil: 'foil' }),
   card({ name: 'Divination', s: { type_line: 'Sorcery', colors: ['U'], color_identity: ['U'], cmc: 3, oracle_text: 'Draw two cards.', rarity: 'common', usd: 0.05 }, quantity: 3 }),
   card({ name: 'Command Tower', s: { type_line: 'Land', colors: [], color_identity: [], cmc: 0, oracle_text: '{T}: Add one mana of any color in your commander’s color identity.', rarity: 'common', usd: 0.5 }, quantity: 5, binder_name: 'Lands Box' }),
@@ -137,6 +137,21 @@ describe('search', () => {
     expect(names(search('is:dfc', FIXTURE))).toEqual(['Clearwater Pathway // Murkwater Pathway']);
     expect(names(search('is:commander', FIXTURE))).toEqual(['Aurelia, Exemplar of Justice']);
     expect(names(search('not:foil t:instant', FIXTURE))).toEqual(['Lightning Bolt']);
+  });
+
+  it('is:vanilla / frenchvanilla / unfinity', () => {
+    const extra = [
+      ...FIXTURE,
+      card({ name: 'Wind Drake', s: { type_line: 'Creature — Drake', oracle_text: 'Flying (This creature can only be blocked by creatures with flying.)', keywords: ['Flying'], power: '2', toughness: '2' } }),
+      card({ name: 'Silly Goose', s: { type_line: 'Creature — Bird', oracle_text: null }, set_code: 'unf' }),
+      card({ name: 'Knight Errant', s: { type_line: 'Creature — Knight', oracle_text: 'First strike, protection from red\nWard {2}', keywords: ['First strike', 'Protection', 'Ward'] } }),
+    ];
+    // vanilla: no ability text at all
+    expect(names(search('is:vanilla', extra))).toEqual(['Grizzly Bears', 'Silly Goose', 'Tarmogoyf']);
+    expect(names(search('is:frenchvanilla', extra))).toEqual(['Knight Errant', 'Wind Drake']);
+    expect(names(search('is:unfinity', extra))).toEqual(['Silly Goose']);
+    // Aurelia has 'Mentor.' oracle text but no keywords array entry -> not french vanilla
+    expect(names(search('is:frenchvanilla c:rw', extra))).toEqual([]);
   });
 
   it('malformed queries throw QueryError', () => {

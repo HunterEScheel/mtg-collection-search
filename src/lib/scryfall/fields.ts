@@ -120,7 +120,41 @@ export function ownedPrice(c: OwnedCard): number | null {
 
 // ---- is: / not: ----
 
+function isCreature(c: OwnedCard): boolean {
+  return (c.scryfall?.type_line ?? '').toLowerCase().includes('creature');
+}
+
+/** Oracle text with reminder text "(...)" stripped, split into non-empty lines. */
+function abilityLines(c: OwnedCard): string[] {
+  return (c.scryfall?.oracle_text ?? '')
+    .replace(/\([^)]*\)/g, '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l !== '' && l !== '//');
+}
+
+/** Every ability line is just a comma-separated list of the card's own keywords. */
+function isFrenchVanilla(c: OwnedCard): boolean {
+  if (!isCreature(c)) return false;
+  const lines = abilityLines(c);
+  if (lines.length === 0) return false; // that's plain vanilla
+  const keywords = new Set((c.scryfall?.keywords ?? []).map((k) => k.toLowerCase()));
+  if (keywords.size === 0) return false;
+  return lines.every((line) =>
+    line
+      .split(/[,;]/)
+      .map((part) => part.trim().replace(/\.$/, '').toLowerCase())
+      .filter((part) => part !== '')
+      // "ward {2}", "protection from red" still count as their keyword
+      .every((part) =>
+        keywords.has(part) || [...keywords].some((k) => part.startsWith(k + ' '))),
+  );
+}
+
 const IS_PREDICATES: Record<string, Predicate> = {
+  vanilla: (c) => isCreature(c) && abilityLines(c).length === 0,
+  frenchvanilla: isFrenchVanilla,
+  unfinity: (c) => (c.scryfall?.set_code ?? c.set_code ?? '').toLowerCase() === 'unf',
   foil: (c) => c.foil !== null && c.foil !== 'normal',
   nonfoil: (c) => c.foil === null || c.foil === 'normal',
   etched: (c) => c.foil === 'etched',
