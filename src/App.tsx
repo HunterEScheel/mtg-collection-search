@@ -11,6 +11,7 @@ import { FilterBar } from './components/FilterBar';
 import { ResultsGrid } from './components/ResultsGrid';
 import { ResultsTable } from './components/ResultsTable';
 import { ImportDialog } from './components/ImportDialog';
+import { DeleteCollectionDialog } from './components/DeleteCollectionDialog';
 import { CardDetail } from './components/CardDetail';
 import type { Collection, OwnedCard } from './types';
 
@@ -21,6 +22,7 @@ function Main({ user }: { user: User }) {
   const [filters, setFilters] = useState<UiFilters>(EMPTY_FILTERS);
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [importing, setImporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [detail, setDetail] = useState<OwnedCard | null>(null);
 
   const { cards, loading, error: loadError, reload } = useCollection(selectedId);
@@ -69,6 +71,14 @@ function Main({ user }: { user: User }) {
         >
           Import CSV
         </button>
+        {selectedId && (
+          <button
+            onClick={() => setDeleting(true)}
+            className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm font-medium text-red-400 ring-1 ring-zinc-700 hover:bg-red-950/60 hover:ring-red-900"
+          >
+            Delete Collection
+          </button>
+        )}
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-zinc-500">{user.email}</span>
           <button
@@ -133,6 +143,23 @@ function Main({ user }: { user: User }) {
           }}
         />
       )}
+
+      {deleting && selectedId && (() => {
+        const col = collections.find((c) => c.id === selectedId);
+        return col ? (
+          <DeleteCollectionDialog
+            collection={col}
+            cardCount={cards.length}
+            onClose={() => setDeleting(false)}
+            onDeleted={(id) => {
+              setDeleting(false);
+              const rest = collections.filter((c) => c.id !== id);
+              setCollections(rest);
+              setSelectedId(rest[0]?.id ?? null);
+            }}
+          />
+        ) : null;
+      })()}
 
       {detail && (
         <CardDetail card={detail} copies={detailCopies} onClose={() => setDetail(null)} />
