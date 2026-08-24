@@ -20,7 +20,7 @@ export function AuthGate({ children }: { children: (user: User) => ReactNode }) 
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  async function oauth(provider: 'github' | 'twitter' | 'discord') {
+  async function oauth(provider: 'github' | 'discord') {
     setError(null);
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
@@ -50,7 +50,6 @@ export function AuthGate({ children }: { children: (user: User) => ReactNode }) 
           <div className="space-y-2">
             {([
               ['github', 'Continue with GitHub'],
-              ['twitter', 'Continue with X'],
               ['discord', 'Continue with Discord'],
             ] as const).map(([provider, label]) => (
               <button
