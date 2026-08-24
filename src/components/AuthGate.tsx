@@ -20,6 +20,15 @@ export function AuthGate({ children }: { children: (user: User) => ReactNode }) 
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  async function oauth(provider: 'github' | 'twitter' | 'discord') {
+    setError(null);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) setError(error.message);
+  }
+
   async function sendLink(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -38,6 +47,25 @@ export function AuthGate({ children }: { children: (user: User) => ReactNode }) 
       <div className="flex min-h-screen items-center justify-center">
         <form onSubmit={sendLink} className="w-80 space-y-4 rounded-xl bg-zinc-900 p-6">
           <h1 className="text-lg font-semibold">MTG Collection Search</h1>
+          <div className="space-y-2">
+            {([
+              ['github', 'Continue with GitHub'],
+              ['twitter', 'Continue with X'],
+              ['discord', 'Continue with Discord'],
+            ] as const).map(([provider, label]) => (
+              <button
+                key={provider}
+                type="button"
+                onClick={() => oauth(provider)}
+                className="w-full rounded-md bg-zinc-800 px-3 py-2 text-sm font-medium ring-1 ring-zinc-700 hover:bg-zinc-700"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-zinc-500">
+            <span className="h-px flex-1 bg-zinc-700" /> or email link <span className="h-px flex-1 bg-zinc-700" />
+          </div>
           {sent ? (
             <p className="text-sm text-emerald-400">
               Check your email for a sign-in link.
