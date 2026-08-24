@@ -143,7 +143,7 @@ describe('search', () => {
     const extra = [
       ...FIXTURE,
       card({ name: 'Wind Drake', s: { type_line: 'Creature — Drake', oracle_text: 'Flying (This creature can only be blocked by creatures with flying.)', keywords: ['Flying'], power: '2', toughness: '2' } }),
-      card({ name: 'Silly Goose', s: { type_line: 'Creature — Bird', oracle_text: null }, set_code: 'unf' }),
+      card({ name: 'Silly Goose', s: { type_line: 'Creature — Bird', oracle_text: null, set_code: 'unf' } }),
       card({ name: 'Knight Errant', s: { type_line: 'Creature — Knight', oracle_text: 'First strike, protection from red\nWard {2}', keywords: ['First strike', 'Protection', 'Ward'] } }),
     ];
     // vanilla: no ability text at all
