@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import type { Location, MovePlan, OwnedCard } from '../types';
 import { parseMoveList } from '../lib/move/parseMoveList';
 import { planMove } from '../lib/move/planMove';
@@ -11,9 +12,13 @@ interface Props {
   onClose: () => void;
 }
 
+/** Sentinel destination value: create a new location on execute. */
+const NEW_LOCATION = '__new__';
+
 export function MoveDialog({ locations, cards, onDone, onClose }: Props) {
   const [sourceId, setSourceId] = useState(locations[0]?.id ?? '');
-  const [destId, setDestId] = useState(locations[1]?.id ?? '');
+  const [destId, setDestId] = useState(locations[1]?.id ?? NEW_LOCATION);
+  const [newName, setNewName] = useState('');
   const [text, setText] = useState('');
   const [plan, setPlan] = useState<MovePlan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -25,9 +30,15 @@ export function MoveDialog({ locations, cards, onDone, onClose }: Props) {
     [plan],
   );
 
+  const invalidate = () => { setPlan(null); setDone(false); };
+
   function preview() {
     setError(null);
     if (sourceId === destId) { setError('Source and destination must differ'); return; }
+    if (destId === NEW_LOCATION && newName.trim() === '') {
+      setError('Name the new location first');
+      return;
+    }
     if (text.trim() === '') { setError('Paste a card list first'); return; }
     try {
       const parsed = parseMoveList(text);
@@ -43,8 +54,20 @@ export function MoveDialog({ locations, cards, onDone, onClose }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const destCards = cards.filter((c) => c.collection_id === destId);
-      await executeMove(computeWrites(plan.transfers, destCards, destId));
+      let targetId = destId;
+      if (destId === NEW_LOCATION) {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) throw new Error('Not signed in');
+        const { data, error } = await supabase
+          .from('collections')
+          .insert({ name: newName.trim(), user_id: userData.user.id })
+          .select('id')
+          .single();
+        if (error) throw new Error(`Creating location failed: ${error.message}`);
+        targetId = data.id;
+      }
+      const destCards = cards.filter((c) => c.collection_id === targetId);
+      await executeMove(computeWrites(plan.transfers, destCards, targetId));
       setDone(true);
       onDone();
     } catch (e) {
@@ -54,7 +77,10 @@ export function MoveDialog({ locations, cards, onDone, onClose }: Props) {
     }
   }
 
-  const locName = (id: string) => locations.find((l) => l.id === id)?.name ?? '?';
+  const locName = (id: string) =>
+    id === NEW_LOCATION
+      ? (newName.trim() || 'new location')
+      : locations.find((l) => l.id === id)?.name ?? '?';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -67,7 +93,7 @@ export function MoveDialog({ locations, cards, onDone, onClose }: Props) {
         <div className="flex items-center gap-2">
           <select
             value={sourceId}
-            onChange={(e) => { setSourceId(e.target.value); setPlan(null); setDone(false); }}
+            onChange={(e) => { setSourceId(e.target.value); invalidate(); }}
             className="min-w-0 flex-1 rounded-md bg-zinc-800 px-3 py-2 text-sm ring-1 ring-zinc-700"
           >
             {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -75,16 +101,27 @@ export function MoveDialog({ locations, cards, onDone, onClose }: Props) {
           <span className="text-zinc-400">→</span>
           <select
             value={destId}
-            onChange={(e) => { setDestId(e.target.value); setPlan(null); setDone(false); }}
+            onChange={(e) => { setDestId(e.target.value); invalidate(); }}
             className="min-w-0 flex-1 rounded-md bg-zinc-800 px-3 py-2 text-sm ring-1 ring-zinc-700"
           >
             {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            <option value={NEW_LOCATION}>+ New location…</option>
           </select>
         </div>
 
+        {destId === NEW_LOCATION && (
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => { setNewName(e.target.value); setDone(false); }}
+            placeholder="New location name (e.g. Gruul Deck)"
+            className="w-full rounded-md bg-zinc-800 px-3 py-2 text-sm ring-1 ring-zinc-700"
+          />
+        )}
+
         <textarea
           value={text}
-          onChange={(e) => { setText(e.target.value); setPlan(null); setDone(false); }}
+          onChange={(e) => { setText(e.target.value); invalidate(); }}
           placeholder={'One card per line, Moxfield format:\n2 Lightning Bolt (2XM) 123\n1 Sol Ring *F*\nGrizzly Bears\n\n(Pasting a supported CSV also works.)'}
           rows={7}
           className="w-full rounded-md bg-zinc-800 px-3 py-2 font-mono text-xs ring-1 ring-zinc-700"
@@ -132,7 +169,7 @@ export function MoveDialog({ locations, cards, onDone, onClose }: Props) {
         <div className="flex gap-2">
           <button
             onClick={preview}
-            disabled={busy || locations.length < 2}
+            disabled={busy || locations.length === 0}
             className="flex-1 rounded-md bg-zinc-800 px-3 py-2 text-sm font-medium ring-1 ring-zinc-700 hover:bg-zinc-700 disabled:opacity-40"
           >
             Preview
@@ -145,9 +182,6 @@ export function MoveDialog({ locations, cards, onDone, onClose }: Props) {
             {busy ? 'Moving…' : done ? 'Done' : `Move ${totalToMove} cop${totalToMove === 1 ? 'y' : 'ies'}`}
           </button>
         </div>
-        {locations.length < 2 && (
-          <p className="text-xs text-zinc-500">You need at least two locations to move cards.</p>
-        )}
       </div>
     </div>
   );

@@ -53,7 +53,7 @@ function Main({ user }: { user: User }) {
         >
           Import CSV
         </button>
-        {locations.length >= 2 && (
+        {locations.length >= 1 && (
           <button
             onClick={() => setMoving(true)}
             className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm font-medium ring-1 ring-zinc-700 hover:bg-zinc-700"
