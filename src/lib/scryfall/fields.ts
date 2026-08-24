@@ -263,9 +263,9 @@ const REGISTRY: Record<string, FieldBuilder> = {
   language: langField,
   qty: numericField((c) => c.quantity),
   quantity: numericField((c) => c.quantity),
-  loc: textContainsField((c) => c.binder_name),
+  loc: textContainsField((c) => c.location_name),
   binder: textContainsField((c) => c.binder_name),
-  location: textContainsField((c) => c.binder_name),
+  location: textContainsField((c) => c.location_name),
   name: textContainsField((c) => c.scryfall?.name ?? c.card_name),
 };
 

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { OwnedCard } from '../types';
 import { ownedPrice } from '../lib/scryfall';
 
-type SortKey = 'name' | 'set' | 'foil' | 'condition' | 'qty' | 'binder' | 'price';
+type SortKey = 'name' | 'set' | 'foil' | 'condition' | 'qty' | 'location' | 'price';
 
 interface Props {
   cards: OwnedCard[];
@@ -15,7 +15,7 @@ const getters: Record<SortKey, (c: OwnedCard) => string | number> = {
   foil: (c) => c.foil ?? '',
   condition: (c) => c.condition ?? '',
   qty: (c) => c.quantity,
-  binder: (c) => c.binder_name ?? '',
+  location: (c) => c.location_name,
   price: (c) => ownedPrice(c) ?? -1,
 };
 
@@ -56,7 +56,7 @@ export function ResultsTable({ cards, onSelect }: Props) {
             {header('foil', 'Foil')}
             {header('condition', 'Cond')}
             {header('qty', 'Qty', 'text-right')}
-            {header('binder', 'Binder')}
+            {header('location', 'Location')}
             {header('price', 'Price', 'text-right')}
           </tr>
         </thead>
@@ -75,7 +75,7 @@ export function ResultsTable({ cards, onSelect }: Props) {
                 <td className="px-3 py-1.5 text-zinc-400">{c.foil === 'normal' ? '' : c.foil}</td>
                 <td className="px-3 py-1.5 text-zinc-400">{c.condition?.replaceAll('_', ' ')}</td>
                 <td className="px-3 py-1.5 text-right">{c.quantity}</td>
-                <td className="px-3 py-1.5 text-zinc-400">{c.binder_name}</td>
+                <td className="px-3 py-1.5 text-zinc-400">{c.location_name}</td>
                 <td className="px-3 py-1.5 text-right text-zinc-400">
                   {price !== null ? `$${price.toFixed(2)}` : '—'}
                 </td>

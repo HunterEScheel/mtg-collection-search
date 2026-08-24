@@ -3,7 +3,7 @@ import { ownedPrice } from '../lib/scryfall';
 
 interface Props {
   card: OwnedCard;
-  /** Every owned copy of this printing (any binder/condition). */
+  /** Every owned copy of this printing (any location/condition). */
   copies: OwnedCard[];
   onClose: () => void;
 }
@@ -63,7 +63,8 @@ export function CardDetail({ card, copies, onClose }: Props) {
                     <span>
                       ×{c.quantity} {c.foil !== 'normal' && c.foil ? `(${c.foil}) ` : ''}
                       {c.condition?.replaceAll('_', ' ')}
-                      {c.binder_name ? ` — ${c.binder_name}` : ''}
+                      {c.location_name ? ` — ${c.location_name}` : ''}
+                      {c.binder_name ? ` – ${c.binder_name}` : ''}
                     </span>
                     <span className="text-zinc-400">{price !== null ? `$${price.toFixed(2)}` : ''}</span>
                   </li>

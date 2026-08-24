@@ -5,10 +5,10 @@ import { compileQuery, QueryError } from '../lib/scryfall';
 export interface UiFilters {
   minQty: number | null;
   maxQty: number | null;
-  binders: string[]; // empty = all
+  locations: string[]; // empty = all
 }
 
-export const EMPTY_FILTERS: UiFilters = { minQty: null, maxQty: null, binders: [] };
+export const EMPTY_FILTERS: UiFilters = { minQty: null, maxQty: null, locations: [] };
 
 /** Debounced Scryfall-syntax search + UI filters (implicit trailing AND). */
 export function useSearch(cards: OwnedCard[], query: string, filters: UiFilters) {
@@ -30,12 +30,12 @@ export function useSearch(cards: OwnedCard[], query: string, filters: UiFilters)
       throw e;
     }
 
-    const binderSet = new Set(filters.binders);
+    const locationSet = new Set(filters.locations);
     const results = cards.filter((c) => {
       if (!pred(c)) return false;
       if (filters.minQty !== null && c.quantity < filters.minQty) return false;
       if (filters.maxQty !== null && c.quantity > filters.maxQty) return false;
-      if (binderSet.size > 0 && !binderSet.has(c.binder_name ?? '')) return false;
+      if (locationSet.size > 0 && !locationSet.has(c.location_name)) return false;
       return true;
     });
     return { results, error: null as string | null };

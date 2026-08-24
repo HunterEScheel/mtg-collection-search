@@ -1,4 +1,5 @@
-export interface Collection {
+/** A physical location (binder, box, shelf…) — stored in the `collections` table. */
+export interface Location {
   id: string;
   user_id: string;
   name: string;
@@ -54,10 +55,12 @@ export interface ScryfallCard {
   legalities: Record<string, string> | null;
 }
 
-/** A collection row joined with its cached Scryfall data — the search unit. */
+/** A card row joined with its cached Scryfall data — the search unit. */
 export interface OwnedCard extends ManaBoxRow {
   id: number;
   collection_id: string;
+  /** Name of the location this row lives in (joined client-side). */
+  location_name: string;
   scryfall: ScryfallCard | null;
 }
 
@@ -65,6 +68,41 @@ export interface ImportProgress {
   stage: 'parsing' | 'checking-cache' | 'fetching-scryfall' | 'saving-cards' | 'done';
   current: number;
   total: number;
+}
+
+/** One parsed line of a Moxfield-style move list. */
+export interface MoveLine {
+  quantity: number;
+  name: string;
+  setCode: string | null;
+  collectorNumber: string | null;
+  /** true = foil requested (`*F*` or `*E*` marker), null = unspecified. */
+  foil: boolean | null;
+}
+
+/** A planned transfer of `qty` copies out of one source row. */
+export interface Transfer {
+  sourceRow: OwnedCard;
+  qty: number;
+}
+
+export interface MoveReport {
+  lines: {
+    line: MoveLine;
+    requested: number;
+    moved: number;
+    short: number;
+    /** No copies of this card exist at the source at all. */
+    notFound: boolean;
+    /** Requested printing not at source; fell back to another printing by name. */
+    printingFallback: boolean;
+  }[];
+  malformed: { line: number; reason: string }[];
+}
+
+export interface MovePlan {
+  transfers: Transfer[];
+  report: MoveReport;
 }
 
 export interface ImportReport {

@@ -1,11 +1,10 @@
 import { useRef, useState } from 'react';
-import { importManaBoxCsv, type ImportMode } from '../lib/manabox/import';
-import type { Collection, ImportProgress, ImportReport } from '../types';
+import { importCollectionCsv, type ImportMode } from '../lib/manabox/import';
+import type { Location, ImportProgress, ImportReport } from '../types';
 
 interface Props {
-  collections: Collection[];
-  currentCollectionId: string | null;
-  onDone: (collectionId: string) => void;
+  locations: Location[];
+  onDone: (locationId: string) => void;
   onClose: () => void;
 }
 
@@ -17,10 +16,10 @@ const STAGE_LABEL: Record<ImportProgress['stage'], string> = {
   done: 'Done',
 };
 
-export function ImportDialog({ collections, currentCollectionId, onDone, onClose }: Props) {
-  const [mode, setMode] = useState<ImportMode>(collections.length === 0 ? 'new' : 'update');
+export function ImportDialog({ locations, onDone, onClose }: Props) {
+  const [mode, setMode] = useState<ImportMode>(locations.length === 0 ? 'new' : 'update');
   const [name, setName] = useState('');
-  const [targetId, setTargetId] = useState(currentCollectionId ?? collections[0]?.id ?? '');
+  const [targetId, setTargetId] = useState(locations[0]?.id ?? '');
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
@@ -35,14 +34,14 @@ export function ImportDialog({ collections, currentCollectionId, onDone, onClose
     setReport(null);
     try {
       const text = await file.text();
-      const { collectionId, report } = await importManaBoxCsv(text, {
+      const { locationId, report } = await importCollectionCsv(text, {
         mode,
-        newCollectionName: name,
-        collectionId: targetId,
+        newLocationName: name,
+        locationId: targetId,
         onProgress: setProgress,
       });
       setReport(report);
-      onDone(collectionId);
+      onDone(locationId);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -54,7 +53,7 @@ export function ImportDialog({ collections, currentCollectionId, onDone, onClose
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-md space-y-4 rounded-xl bg-zinc-900 p-6 ring-1 ring-zinc-700">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Import Collection CSV</h2>
+          <h2 className="text-lg font-semibold">Import CSV into a Location</h2>
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-100">✕</button>
         </div>
 
@@ -65,16 +64,16 @@ export function ImportDialog({ collections, currentCollectionId, onDone, onClose
               mode === 'new' ? 'bg-indigo-600 ring-indigo-500' : 'bg-zinc-800 ring-zinc-700'
             }`}
           >
-            New Collection
+            New Location
           </button>
           <button
             onClick={() => setMode('update')}
-            disabled={collections.length === 0}
+            disabled={locations.length === 0}
             className={`flex-1 rounded-md px-3 py-2 text-sm font-medium ring-1 disabled:opacity-40 ${
               mode === 'update' ? 'bg-indigo-600 ring-indigo-500' : 'bg-zinc-800 ring-zinc-700'
             }`}
           >
-            Update Collection
+            Existing Location
           </button>
         </div>
 
@@ -83,7 +82,7 @@ export function ImportDialog({ collections, currentCollectionId, onDone, onClose
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Collection name"
+            placeholder="Location name (e.g. Trade Binder)"
             className="w-full rounded-md bg-zinc-800 px-3 py-2 text-sm ring-1 ring-zinc-700"
           />
         ) : (
@@ -92,10 +91,17 @@ export function ImportDialog({ collections, currentCollectionId, onDone, onClose
             onChange={(e) => setTargetId(e.target.value)}
             className="w-full rounded-md bg-zinc-800 px-3 py-2 text-sm ring-1 ring-zinc-700"
           >
-            {collections.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
             ))}
           </select>
+        )}
+
+        {mode === 'update' && (
+          <p className="text-xs text-zinc-500">
+            Matching cards are set to the CSV's quantities (a re-sync, not an add); cards not in
+            the CSV are left alone.
+          </p>
         )}
 
         <input ref={fileRef} type="file" accept=".csv,text/csv" className="w-full text-sm" />

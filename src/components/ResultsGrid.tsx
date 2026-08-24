@@ -30,9 +30,9 @@ export function ResultsGrid({ cards, onSelect }: Props) {
           <span className="absolute right-1 top-1 rounded bg-black/80 px-1.5 py-0.5 text-xs font-semibold">
             ×{c.quantity}
           </span>
-          {c.binder_name && (
+          {c.location_name && (
             <span className="absolute bottom-1 left-1 max-w-[90%] truncate rounded bg-black/80 px-1.5 py-0.5 text-[10px] text-zinc-300">
-              {c.binder_name}
+              {c.location_name}
             </span>
           )}
         </button>

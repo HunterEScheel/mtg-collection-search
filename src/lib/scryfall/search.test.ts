@@ -9,6 +9,7 @@ function card(over: Partial<OwnedCard> & { name: string; s?: Partial<ScryfallCar
   return {
     id: nextId++,
     collection_id: 'c1',
+    location_name: 'Main',
     scryfall_id: `id-${nextId}`,
     binder_name: 'Main',
     binder_type: 'binder',
@@ -59,10 +60,10 @@ function card(over: Partial<OwnedCard> & { name: string; s?: Partial<ScryfallCar
 const FIXTURE: OwnedCard[] = [
   card({ name: 'Lightning Bolt', s: { type_line: 'Instant', colors: ['R'], color_identity: ['R'], cmc: 1, oracle_text: 'Lightning Bolt deals 3 damage to any target.', rarity: 'common', usd: 1.5, mana_cost: '{R}' }, quantity: 4 }),
   card({ name: 'Grizzly Bears', s: { type_line: 'Creature — Bear', colors: ['G'], color_identity: ['G'], cmc: 2, power: '2', toughness: '2', rarity: 'common', usd: 0.1 }, quantity: 2 }),
-  card({ name: 'Goblin Guide', s: { type_line: 'Creature — Goblin Scout', colors: ['R'], color_identity: ['R'], cmc: 1, power: '2', toughness: '2', rarity: 'rare', usd: 3.2, oracle_text: 'Haste\nWhenever Goblin Guide attacks, defending player reveals the top card of their library.', keywords: ['Haste'] }, quantity: 1, binder_name: 'USD>20' }),
-  card({ name: 'Aurelia, Exemplar of Justice', s: { type_line: 'Legendary Creature — Angel', colors: ['R', 'W'], color_identity: ['R', 'W'], cmc: 4, power: '2', toughness: '5', rarity: 'mythic', usd: 4.9, oracle_text: 'Mentor.' }, quantity: 1, binder_name: 'USD>20', foil: 'foil' }),
+  card({ name: 'Goblin Guide', s: { type_line: 'Creature — Goblin Scout', colors: ['R'], color_identity: ['R'], cmc: 1, power: '2', toughness: '2', rarity: 'rare', usd: 3.2, oracle_text: 'Haste\nWhenever Goblin Guide attacks, defending player reveals the top card of their library.', keywords: ['Haste'] }, quantity: 1, binder_name: 'USD>20', location_name: 'Trade Box' }),
+  card({ name: 'Aurelia, Exemplar of Justice', s: { type_line: 'Legendary Creature — Angel', colors: ['R', 'W'], color_identity: ['R', 'W'], cmc: 4, power: '2', toughness: '5', rarity: 'mythic', usd: 4.9, oracle_text: 'Mentor.' }, quantity: 1, binder_name: 'USD>20', location_name: 'Trade Box', foil: 'foil' }),
   card({ name: 'Divination', s: { type_line: 'Sorcery', colors: ['U'], color_identity: ['U'], cmc: 3, oracle_text: 'Draw two cards.', rarity: 'common', usd: 0.05 }, quantity: 3 }),
-  card({ name: 'Command Tower', s: { type_line: 'Land', colors: [], color_identity: [], cmc: 0, oracle_text: '{T}: Add one mana of any color in your commander’s color identity.', rarity: 'common', usd: 0.5 }, quantity: 5, binder_name: 'Lands Box' }),
+  card({ name: 'Command Tower', s: { type_line: 'Land', colors: [], color_identity: [], cmc: 0, oracle_text: '{T}: Add one mana of any color in your commander’s color identity.', rarity: 'common', usd: 0.5 }, quantity: 5, binder_name: 'Lands Box', location_name: 'Storage' }),
   card({ name: 'Tarmogoyf', s: { type_line: 'Creature — Lhurgoyf', colors: ['G'], color_identity: ['G'], cmc: 2, power: '*', toughness: '1+*', rarity: 'mythic', usd: 8.0 }, quantity: 1 }),
   card({ name: 'Clearwater Pathway // Murkwater Pathway', s: { type_line: 'Land // Land', colors: [], color_identity: ['U', 'B'], cmc: 0, layout: 'modal_dfc', rarity: 'rare', usd: 4.7 }, quantity: 1 }),
 ];
@@ -91,12 +92,16 @@ describe('search', () => {
     ]);
   });
 
-  it('qty and loc filters', () => {
+  it('qty, loc, and binder filters', () => {
     expect(names(search('qty>=2', FIXTURE))).toEqual([
       'Command Tower', 'Divination', 'Grizzly Bears', 'Lightning Bolt',
     ]);
-    expect(names(search('qty>=2 loc:"USD>20"', FIXTURE))).toEqual([]);
-    expect(names(search('loc:"USD>20"', FIXTURE))).toEqual([
+    expect(names(search('qty>=2 loc:"Trade Box"', FIXTURE))).toEqual([]);
+    expect(names(search('loc:"Trade Box"', FIXTURE))).toEqual([
+      'Aurelia, Exemplar of Justice', 'Goblin Guide',
+    ]);
+    expect(names(search('location:storage', FIXTURE))).toEqual(['Command Tower']);
+    expect(names(search('binder:"USD>20"', FIXTURE))).toEqual([
       'Aurelia, Exemplar of Justice', 'Goblin Guide',
     ]);
     expect(names(search('binder:lands', FIXTURE))).toEqual(['Command Tower']);

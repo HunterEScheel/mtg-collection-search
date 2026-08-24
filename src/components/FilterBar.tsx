@@ -3,15 +3,15 @@ import type { UiFilters } from '../hooks/useSearch';
 interface Props {
   filters: UiFilters;
   onChange: (f: UiFilters) => void;
-  binderNames: string[];
+  locationNames: string[];
 }
 
-export function FilterBar({ filters, onChange, binderNames }: Props) {
-  const toggleBinder = (name: string) => {
-    const next = filters.binders.includes(name)
-      ? filters.binders.filter((b) => b !== name)
-      : [...filters.binders, name];
-    onChange({ ...filters, binders: next });
+export function FilterBar({ filters, onChange, locationNames }: Props) {
+  const toggleLocation = (name: string) => {
+    const next = filters.locations.includes(name)
+      ? filters.locations.filter((b) => b !== name)
+      : [...filters.locations, name];
+    onChange({ ...filters, locations: next });
   };
 
   const numInput = (value: number | null, set: (v: number | null) => void, label: string) => (
@@ -34,23 +34,23 @@ export function FilterBar({ filters, onChange, binderNames }: Props) {
       {numInput(filters.maxQty, (v) => onChange({ ...filters, maxQty: v }), 'max')}
       <span className="ml-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Location</span>
       <div className="flex flex-wrap gap-1">
-        {binderNames.map((name) => (
+        {locationNames.map((name) => (
           <button
             key={name}
-            onClick={() => toggleBinder(name)}
+            onClick={() => toggleLocation(name)}
             className={`rounded-full px-2.5 py-0.5 text-xs ring-1 ${
-              filters.binders.includes(name)
+              filters.locations.includes(name)
                 ? 'bg-indigo-600 ring-indigo-500'
                 : 'bg-zinc-800 ring-zinc-700 hover:bg-zinc-700'
             }`}
           >
-            {name || '(no binder)'}
+            {name}
           </button>
         ))}
       </div>
-      {(filters.minQty !== null || filters.maxQty !== null || filters.binders.length > 0) && (
+      {(filters.minQty !== null || filters.maxQty !== null || filters.locations.length > 0) && (
         <button
-          onClick={() => onChange({ minQty: null, maxQty: null, binders: [] })}
+          onClick={() => onChange({ minQty: null, maxQty: null, locations: [] })}
           className="text-xs text-zinc-400 underline hover:text-zinc-200"
         >
           clear

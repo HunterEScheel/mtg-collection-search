@@ -1,48 +1,35 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import { ownedPrice } from './lib/scryfall';
-import { useCollection } from './hooks/useCollection';
+import { useAllCards } from './hooks/useAllCards';
 import { useSearch, EMPTY_FILTERS, type UiFilters } from './hooks/useSearch';
 import { AuthGate } from './components/AuthGate';
-import { CollectionPicker } from './components/CollectionPicker';
 import { SearchBar } from './components/SearchBar';
 import { FilterBar } from './components/FilterBar';
 import { ResultsGrid } from './components/ResultsGrid';
 import { ResultsTable } from './components/ResultsTable';
 import { ImportDialog } from './components/ImportDialog';
-import { DeleteCollectionDialog } from './components/DeleteCollectionDialog';
+import { MoveDialog } from './components/MoveDialog';
+import { ManageLocationsDialog } from './components/ManageLocationsDialog';
 import { CardDetail } from './components/CardDetail';
-import type { Collection, OwnedCard } from './types';
+import type { OwnedCard } from './types';
 
 function Main({ user }: { user: User }) {
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<UiFilters>(EMPTY_FILTERS);
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [importing, setImporting] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [managing, setManaging] = useState(false);
   const [detail, setDetail] = useState<OwnedCard | null>(null);
 
-  const { cards, loading, error: loadError, reload } = useCollection(selectedId);
+  const { cards, locations, loading, error: loadError, reload } = useAllCards();
   const { results, error: queryError } = useSearch(cards, query, filters);
 
-  useEffect(() => {
-    supabase
-      .from('collections')
-      .select('*')
-      .order('created_at')
-      .then(({ data }) => {
-        const list = (data ?? []) as Collection[];
-        setCollections(list);
-        setSelectedId((cur) => cur ?? list[0]?.id ?? null);
-      });
-  }, []);
-
-  const binderNames = useMemo(
-    () => [...new Set(cards.map((c) => c.binder_name ?? ''))].sort(),
-    [cards],
+  const locationNames = useMemo(
+    () => locations.map((l) => l.name).sort(),
+    [locations],
   );
 
   const totals = useMemo(() => {
@@ -60,23 +47,26 @@ function Main({ user }: { user: User }) {
     <div className="mx-auto max-w-7xl space-y-4 p-4">
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold">MTG Collection Search</h1>
-        <CollectionPicker
-          collections={collections}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-        />
         <button
           onClick={() => setImporting(true)}
           className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium hover:bg-indigo-500"
         >
           Import CSV
         </button>
-        {selectedId && (
+        {locations.length >= 2 && (
           <button
-            onClick={() => setDeleting(true)}
-            className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm font-medium text-red-400 ring-1 ring-zinc-700 hover:bg-red-950/60 hover:ring-red-900"
+            onClick={() => setMoving(true)}
+            className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm font-medium ring-1 ring-zinc-700 hover:bg-zinc-700"
           >
-            Delete Collection
+            Move Cards
+          </button>
+        )}
+        {locations.length > 0 && (
+          <button
+            onClick={() => setManaging(true)}
+            className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm font-medium ring-1 ring-zinc-700 hover:bg-zinc-700"
+          >
+            Manage Locations
           </button>
         )}
         <div className="ml-auto flex items-center gap-3">
@@ -107,13 +97,13 @@ function Main({ user }: { user: User }) {
         </div>
       </div>
 
-      <FilterBar filters={filters} onChange={setFilters} binderNames={binderNames} />
+      <FilterBar filters={filters} onChange={setFilters} locationNames={locationNames} />
 
       {loadError && <p className="text-sm text-red-400">{loadError}</p>}
       {loading ? (
         <p className="text-sm text-zinc-400">Loading collection…</p>
-      ) : selectedId === null ? (
-        <p className="text-sm text-zinc-400">Import a ManaBox CSV to get started.</p>
+      ) : locations.length === 0 ? (
+        <p className="text-sm text-zinc-400">Import a CSV to create your first location.</p>
       ) : (
         <>
           <p className="text-sm text-zinc-400">
@@ -129,37 +119,29 @@ function Main({ user }: { user: User }) {
 
       {importing && (
         <ImportDialog
-          collections={collections}
-          currentCollectionId={selectedId}
+          locations={locations}
           onClose={() => setImporting(false)}
-          onDone={(id) => {
-            supabase
-              .from('collections')
-              .select('*')
-              .order('created_at')
-              .then(({ data }) => setCollections((data ?? []) as Collection[]));
-            setSelectedId(id);
-            reload();
-          }}
+          onDone={() => reload()}
         />
       )}
 
-      {deleting && selectedId && (() => {
-        const col = collections.find((c) => c.id === selectedId);
-        return col ? (
-          <DeleteCollectionDialog
-            collection={col}
-            cardCount={cards.length}
-            onClose={() => setDeleting(false)}
-            onDeleted={(id) => {
-              setDeleting(false);
-              const rest = collections.filter((c) => c.id !== id);
-              setCollections(rest);
-              setSelectedId(rest[0]?.id ?? null);
-            }}
-          />
-        ) : null;
-      })()}
+      {moving && (
+        <MoveDialog
+          locations={locations}
+          cards={cards}
+          onClose={() => setMoving(false)}
+          onDone={() => reload()}
+        />
+      )}
+
+      {managing && (
+        <ManageLocationsDialog
+          locations={locations}
+          cards={cards}
+          onClose={() => setManaging(false)}
+          onChanged={() => reload()}
+        />
+      )}
 
       {detail && (
         <CardDetail card={detail} copies={detailCopies} onClose={() => setDetail(null)} />

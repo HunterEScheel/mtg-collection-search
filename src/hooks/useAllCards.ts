@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import type { OwnedCard, ScryfallCard } from '../types';
+import type { Location, OwnedCard, ScryfallCard } from '../types';
 
 const PAGE = 1000;
 const ID_CHUNK = 500;
@@ -11,24 +11,35 @@ const SCRYFALL_PROJECTION =
   'rarity,set_code,set_name,power,toughness,loyalty,layout,usd,usd_foil,' +
   'image_small,image_normal,scryfall_uri,legalities';
 
-async function loadAll(collectionId: string): Promise<OwnedCard[]> {
-  // 1. Page through the collection rows (Supabase caps a request at 1000 rows).
-  const rows: Omit<OwnedCard, 'scryfall'>[] = [];
+type DbRow = Omit<OwnedCard, 'scryfall' | 'location_name'>;
+
+async function loadAll(): Promise<{ cards: OwnedCard[]; locations: Location[] }> {
+  // 1. Fetch the user's locations (RLS scopes to the signed-in user).
+  const { data: locData, error: locError } = await supabase
+    .from('collections')
+    .select('*')
+    .order('created_at');
+  if (locError) throw new Error(locError.message);
+  const locations = (locData ?? []) as Location[];
+  const nameById = new Map(locations.map((l) => [l.id, l.name]));
+
+  // 2. Page through every card row across all locations
+  //    (Supabase caps a request at 1000 rows).
+  const rows: DbRow[] = [];
   let offset = 0;
   for (;;) {
     const { data, error } = await supabase
       .from('collection_cards')
       .select('*')
-      .eq('collection_id', collectionId)
       .order('id')
       .range(offset, offset + PAGE - 1);
     if (error) throw new Error(error.message);
-    rows.push(...((data ?? []) as Omit<OwnedCard, 'scryfall'>[]));
+    rows.push(...((data ?? []) as DbRow[]));
     if ((data ?? []).length < PAGE) break;
     offset += PAGE;
   }
 
-  // 2. Fetch cached Scryfall data for the distinct printings and join in memory.
+  // 3. Fetch cached Scryfall data for the distinct printings and join in memory.
   //    (No FK join: rows with unresolved Scryfall ids must still import.)
   const ids = [...new Set(rows.map((r) => r.scryfall_id))];
   const byId = new Map<string, ScryfallCard>();
@@ -41,34 +52,40 @@ async function loadAll(collectionId: string): Promise<OwnedCard[]> {
     for (const card of (data ?? []) as unknown as ScryfallCard[]) byId.set(card.id, card);
   }
 
-  return rows.map((r) => ({ ...r, scryfall: byId.get(r.scryfall_id) ?? null }));
+  const cards = rows.map((r) => ({
+    ...r,
+    location_name: nameById.get(r.collection_id) ?? '',
+    scryfall: byId.get(r.scryfall_id) ?? null,
+  }));
+  return { cards, locations };
 }
 
-/** Load a collection's cards (joined with cached Scryfall data) into memory. */
-export function useCollection(collectionId: string | null) {
+/** Load every owned card across all locations (joined with cached Scryfall data). */
+export function useAllCards() {
   const [cards, setCards] = useState<OwnedCard[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
   useEffect(() => {
-    if (!collectionId) {
-      setCards([]);
-      return;
-    }
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    loadAll(collectionId)
-      .then((all) => { if (!cancelled) setCards(all); })
+    loadAll()
+      .then(({ cards, locations }) => {
+        if (cancelled) return;
+        setCards(cards);
+        setLocations(locations);
+      })
       .catch((e: Error) => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
-  }, [collectionId, reloadKey]);
+  }, [reloadKey]);
 
-  return { cards, loading, error, reload };
+  return { cards, locations, loading, error, reload };
 }
