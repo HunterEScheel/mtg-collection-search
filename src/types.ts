@@ -3,6 +3,8 @@ export interface Location {
   id: string;
   user_id: string;
   name: string;
+  /** Public share token; null = not shared. */
+  share_id: string | null;
   created_at: string;
   updated_at: string;
 }

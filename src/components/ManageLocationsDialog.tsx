@@ -17,8 +17,45 @@ export function ManageLocationsDialog({ locations, cards, onChanged, onClose }: 
   const [renameValue, setRenameValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const countFor = (id: string) => cards.filter((c) => c.collection_id === id).length;
+
+  const shareUrl = (shareId: string) =>
+    `${window.location.origin}${window.location.pathname}?share=${shareId}`;
+
+  async function setShare(loc: Location, shareId: string | null) {
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase
+      .from('collections')
+      .update({ share_id: shareId })
+      .eq('id', loc.id);
+    setBusy(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    if (shareId) {
+      try {
+        await navigator.clipboard.writeText(shareUrl(shareId));
+        setCopiedId(loc.id);
+      } catch {
+        // Clipboard can fail (permissions); the link stays visible to copy manually.
+      }
+    }
+    onChanged();
+  }
+
+  async function copyLink(loc: Location) {
+    if (!loc.share_id) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl(loc.share_id));
+      setCopiedId(loc.id);
+    } catch {
+      setError('Could not copy — copy the link from the address below.');
+    }
+  }
 
   async function saveRename(loc: Location) {
     const name = renameValue.trim();
@@ -55,7 +92,8 @@ export function ManageLocationsDialog({ locations, cards, onChanged, onClose }: 
 
         <ul className="space-y-2">
           {locations.map((loc) => (
-            <li key={loc.id} className="flex items-center gap-2 rounded-md bg-zinc-800 px-3 py-2">
+            <li key={loc.id} className="space-y-1 rounded-md bg-zinc-800 px-3 py-2">
+              <div className="flex items-center gap-2">
               {renamingId === loc.id ? (
                 <>
                   <input
@@ -100,6 +138,37 @@ export function ManageLocationsDialog({ locations, cards, onChanged, onClose }: 
                   </button>
                 </>
               )}
+              </div>
+              <div className="flex items-center gap-2">
+                {loc.share_id ? (
+                  <>
+                    <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-zinc-500">
+                      {shareUrl(loc.share_id)}
+                    </span>
+                    <button
+                      onClick={() => copyLink(loc)}
+                      className="text-xs text-indigo-400 underline hover:text-indigo-300"
+                    >
+                      {copiedId === loc.id ? 'copied!' : 'copy link'}
+                    </button>
+                    <button
+                      onClick={() => setShare(loc, null)}
+                      disabled={busy}
+                      className="text-xs text-zinc-400 underline hover:text-zinc-200"
+                    >
+                      unshare
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setShare(loc, crypto.randomUUID())}
+                    disabled={busy}
+                    className="text-xs text-zinc-400 underline hover:text-zinc-200"
+                  >
+                    share
+                  </button>
+                )}
+              </div>
             </li>
           ))}
         </ul>
