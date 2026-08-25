@@ -256,6 +256,12 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
             {reserveMode ? 'Reserving — click cards to add' : 'Reserve cards'}
           </button>
         )}
+        <a
+          href={`${window.location.origin}${window.location.pathname}`}
+          className="ml-auto rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium hover:bg-indigo-500"
+        >
+          {user ? 'My Collection' : 'Sign in to your collection'}
+        </a>
       </header>
 
       {loading ? (
