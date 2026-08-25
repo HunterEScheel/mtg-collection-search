@@ -20,12 +20,18 @@ interface SharedPayload {
   })[];
 }
 
-interface ReserveResult {
-  location_id: string;
-  share_id: string;
-  name: string;
-  moved: number;
+interface ReserveConflict {
+  id: number;
+  name: string | null;
+  requested: number;
+  available: number;
 }
+
+type ReserveResponse =
+  | { ok: true; location_id: string; share_id: string; name: string; moved: number }
+  | { ok: false; conflicts: ReserveConflict[] };
+
+type ReserveResult = Extract<ReserveResponse, { ok: true }>;
 
 /** Read-only public view of one shared location — no login required. */
 export function SharedLocationView({ shareId }: { shareId: string }) {
@@ -46,6 +52,7 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
   const [buyerName, setBuyerName] = useState('');
   const [reserving, setReserving] = useState(false);
   const [reserveError, setReserveError] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<ReserveConflict[] | null>(null);
   const [reserved, setReserved] = useState<ReserveResult | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -102,6 +109,7 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
 
   async function reserve() {
     setReserveError(null);
+    setConflicts(null);
     if (buyerName.trim() === '') { setReserveError('Enter your name first'); return; }
     if (cartCount === 0) { setReserveError('Click cards to add them first'); return; }
     setReserving(true);
@@ -115,7 +123,26 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
       setReserveError(error.message);
       return;
     }
-    setReserved(data as ReserveResult);
+    const response = data as ReserveResponse;
+    if (!response.ok) {
+      // Fill in names the server no longer knows from our (stale) card list.
+      const named = response.conflicts.map((c) => ({
+        ...c,
+        name: c.name ?? cardById.get(c.id)?.scryfall?.name
+          ?? cardById.get(c.id)?.card_name ?? 'Unknown card',
+      }));
+      setConflicts(named);
+      // Drop what's gone, clamp what's short, and refresh the list.
+      const next = new Map(cart);
+      for (const c of response.conflicts) {
+        if (c.available <= 0) next.delete(c.id);
+        else next.set(c.id, Math.min(next.get(c.id) ?? 0, c.available));
+      }
+      setCart(next);
+      setReloadKey((k) => k + 1);
+      return;
+    }
+    setReserved(response);
   }
 
   const reservedUrl = reserved
@@ -214,6 +241,24 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
                 </button>
               </div>
               {reserveError && <p className="text-sm text-red-400">{reserveError}</p>}
+              {conflicts && (
+                <div className="space-y-1 rounded-md bg-red-950/40 p-2 ring-1 ring-red-900">
+                  <p className="text-sm font-medium text-red-400">Someone beat you to it.</p>
+                  <ul className="space-y-0.5 text-xs text-red-300">
+                    {conflicts.map((c) => (
+                      <li key={c.id}>
+                        {c.name} — {c.available <= 0
+                          ? 'already reserved'
+                          : `only ${c.available} of ${c.requested} left`}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-zinc-400">
+                    The list has been refreshed and your selection adjusted — nothing was
+                    reserved yet.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
