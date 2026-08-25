@@ -114,4 +114,6 @@ export interface ImportReport {
   unresolvedScryfallIds: string[];
   /** Cards from id-less formats that could not be matched on Scryfall. */
   unresolvedNames: string[];
+  /** Names of the locations rows were imported into (binders split out). */
+  locations: string[];
 }

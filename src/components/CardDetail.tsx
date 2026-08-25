@@ -64,7 +64,7 @@ export function CardDetail({ card, copies, onClose }: Props) {
                       ×{c.quantity} {c.foil !== 'normal' && c.foil ? `(${c.foil}) ` : ''}
                       {c.condition?.replaceAll('_', ' ')}
                       {c.location_name ? ` — ${c.location_name}` : ''}
-                      {c.binder_name ? ` – ${c.binder_name}` : ''}
+                      {c.binder_name && c.binder_name !== c.location_name ? ` – ${c.binder_name}` : ''}
                     </span>
                     <span className="text-zinc-400">{price !== null ? `$${price.toFixed(2)}` : ''}</span>
                   </li>

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { importCollectionCsv, type ImportMode } from '../lib/manabox/import';
+import { importCollectionCsv, type ImportMode, type QuantityMode } from '../lib/manabox/import';
 import type { Location, ImportProgress, ImportReport } from '../types';
 
 interface Props {
@@ -20,6 +20,8 @@ export function ImportDialog({ locations, onDone, onClose }: Props) {
   const [mode, setMode] = useState<ImportMode>(locations.length === 0 ? 'new' : 'update');
   const [name, setName] = useState('');
   const [targetId, setTargetId] = useState(locations[0]?.id ?? '');
+  const [quantityMode, setQuantityMode] = useState<QuantityMode>('add');
+  const [splitBinders, setSplitBinders] = useState(false);
   const [pasted, setPasted] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -42,6 +44,8 @@ export function ImportDialog({ locations, onDone, onClose }: Props) {
         mode,
         newLocationName: name,
         locationId: targetId,
+        quantityMode,
+        splitBinders,
         onProgress: setProgress,
       });
       setReport(report);
@@ -102,11 +106,58 @@ export function ImportDialog({ locations, onDone, onClose }: Props) {
         )}
 
         {mode === 'update' && (
-          <p className="text-xs text-zinc-500">
-            Matching cards are set to the imported quantities (a re-sync, not an add); cards not
-            in the import are left alone.
-          </p>
+          <div className="space-y-1">
+            <div className="flex gap-4 text-sm">
+              <label className="flex items-center gap-1.5">
+                <input
+                  type="radio"
+                  checked={quantityMode === 'add'}
+                  onChange={() => setQuantityMode('add')}
+                />
+                Add to quantities
+              </label>
+              <label className="flex items-center gap-1.5">
+                <input
+                  type="radio"
+                  checked={quantityMode === 'replace'}
+                  onChange={() => setQuantityMode('replace')}
+                />
+                Replace quantities
+              </label>
+            </div>
+            <p className="text-xs text-zinc-500">
+              {quantityMode === 'add'
+                ? 'Imported quantities are added on top of what the location already holds.'
+                : 'Matching cards are set to the imported quantities (a re-sync); cards not in the import are left alone.'}
+            </p>
+          </div>
         )}
+
+        <div className="space-y-1">
+          <div className="flex gap-4 text-sm">
+            <label className="flex items-center gap-1.5">
+              <input
+                type="radio"
+                checked={!splitBinders}
+                onChange={() => setSplitBinders(false)}
+              />
+              One location
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input
+                type="radio"
+                checked={splitBinders}
+                onChange={() => setSplitBinders(true)}
+              />
+              Binders become locations
+            </label>
+          </div>
+          <p className="text-xs text-zinc-500">
+            {splitBinders
+              ? 'Cards with a binder name (ManaBox, Dragon Shield) go to a location named after the binder, created if needed. Cards without a binder go to the location above.'
+              : 'Everything goes to the location above; binder names stay searchable via binder:.'}
+          </p>
+        </div>
 
         <input ref={fileRef} type="file" accept=".csv,.txt,text/csv,text/plain" className="w-full text-sm" />
 
@@ -131,7 +182,8 @@ export function ImportDialog({ locations, onDone, onClose }: Props) {
         {report && (
           <div className="space-y-1 rounded-md bg-zinc-800 p-3 text-sm">
             <p className="text-emerald-400">
-              Imported {report.imported} card rows ({report.format} format).
+              Imported {report.imported} card rows ({report.format} format)
+              {report.locations.length > 0 ? ` into ${report.locations.join(', ')}` : ''}.
             </p>
             {report.unresolvedNames.length > 0 && (
               <p className="text-amber-400">
