@@ -159,6 +159,19 @@ describe('search', () => {
     expect(names(search('is:frenchvanilla c:rw', extra))).toEqual([]);
   });
 
+  it('spawns: matches token subtypes in create clauses', () => {
+    const extra = [
+      ...FIXTURE,
+      card({ name: 'Krenko, Mob Boss', s: { type_line: 'Legendary Creature — Goblin Warrior', oracle_text: '{T}: Create X 1/1 red Goblin creature tokens, where X is the number of Goblins you control.' } }),
+      card({ name: 'Pirated Copy', s: { type_line: 'Enchantment', oracle_text: 'When Pirated Copy enters the battlefield, create a Treasure token.' } }),
+      card({ name: 'Goblin Lackey', s: { type_line: 'Creature — Goblin', oracle_text: 'Whenever Goblin Lackey deals damage to a player, you may put a Goblin permanent card from your hand onto the battlefield.' } }),
+    ];
+    expect(names(search('spawns:goblin', extra))).toEqual(['Krenko, Mob Boss']);
+    expect(names(search('spawns:treasure', extra))).toEqual(['Pirated Copy']);
+    expect(names(search('spawns:soldier', extra))).toEqual([]);
+    expect(() => search('spawns>goblin', extra)).toThrow(QueryError);
+  });
+
   it('malformed queries throw QueryError', () => {
     expect(() => search('t:creature (c:r', FIXTURE)).toThrow(QueryError);
     expect(() => search('o:"unclosed', FIXTURE)).toThrow(QueryError);

@@ -228,7 +228,16 @@ const langField = (op: Op, value: string): Predicate => {
   return (c) => (c.language ?? '').toLowerCase() === code;
 };
 
+const spawnsField = (op: Op, value: string): Predicate => {
+  if (op !== ':' && op !== '=') throw new QueryError(`Operator "${op}" not valid for spawns`);
+  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // A "create ..." clause that names the subtype before "token", within one sentence
+  const re = new RegExp(`create[^.\\n]*\\b${escaped}\\b[^.\\n]*\\btokens?\\b`, 'i');
+  return (c) => re.test(c.scryfall?.oracle_text ?? '');
+};
+
 const REGISTRY: Record<string, FieldBuilder> = {
+  spawns: spawnsField,
   t: textContainsField((c) => c.scryfall?.type_line ?? null),
   type: textContainsField((c) => c.scryfall?.type_line ?? null),
   o: oracleField,
