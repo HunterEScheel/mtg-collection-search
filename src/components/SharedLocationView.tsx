@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { ownedPrice } from '../lib/scryfall';
 import { useSearch, EMPTY_FILTERS } from '../hooks/useSearch';
@@ -33,6 +34,81 @@ type ReserveResponse =
 
 type ReserveResult = Extract<ReserveResponse, { ok: true }>;
 
+/**
+ * Inline sign-in for buyers. Auth redirects go to the site origin (GUID share
+ * URLs can't all be registered as redirect URLs); the share id is stashed in
+ * localStorage and main.tsx routes back to this page after sign-in.
+ */
+export const RESUME_SHARE_KEY = 'resume-share-id';
+
+function SignInPanel({ shareId }: { shareId: string }) {
+  const redirectTo = window.location.origin;
+  const [email, setEmail] = useState('');
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function oauth(provider: 'github' | 'discord') {
+    setError(null);
+    localStorage.setItem(RESUME_SHARE_KEY, shareId);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo },
+    });
+    if (error) setError(error.message);
+  }
+
+  async function sendLink(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    localStorage.setItem(RESUME_SHARE_KEY, shareId);
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: redirectTo },
+    });
+    if (error) setError(error.message);
+    else setSent(true);
+  }
+
+  return (
+    <form onSubmit={sendLink} className="space-y-3 rounded-md bg-zinc-900 p-3 ring-1 ring-emerald-900/60">
+      <p className="text-sm text-zinc-300">Sign in to reserve cards:</p>
+      <div className="flex gap-2">
+        {([['github', 'GitHub'], ['discord', 'Discord']] as const).map(([provider, label]) => (
+          <button
+            key={provider}
+            type="button"
+            onClick={() => oauth(provider)}
+            className="flex-1 rounded-md bg-zinc-800 px-3 py-2 text-sm font-medium ring-1 ring-zinc-700 hover:bg-zinc-700"
+          >
+            Continue with {label}
+          </button>
+        ))}
+      </div>
+      {sent ? (
+        <p className="text-sm text-emerald-400">Check your email for a sign-in link.</p>
+      ) : (
+        <div className="flex gap-2">
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            className="min-w-0 flex-1 rounded-md bg-zinc-800 px-3 py-2 text-sm ring-1 ring-zinc-700"
+          />
+          <button
+            type="submit"
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium hover:bg-indigo-500"
+          >
+            Send magic link
+          </button>
+        </div>
+      )}
+      {error && <p className="text-sm text-red-400">{error}</p>}
+    </form>
+  );
+}
+
 /** Read-only public view of one shared location — no login required. */
 export function SharedLocationView({ shareId }: { shareId: string }) {
   const [name, setName] = useState<string | null>(null);
@@ -55,6 +131,27 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
   const [conflicts, setConflicts] = useState<ReserveConflict[] | null>(null);
   const [reserved, setReserved] = useState<ReserveResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // Prefill the buyer name from the signed-in account.
+  useEffect(() => {
+    if (user && buyerName === '') {
+      setBuyerName(
+        (user.user_metadata?.full_name as string | undefined)
+          ?? (user.user_metadata?.name as string | undefined)
+          ?? user.email ?? '',
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,7 +200,7 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
   }
 
   function onCardClick(c: OwnedCard) {
-    if (reserveMode && !reserved) setCartQty(c.id, (cart.get(c.id) ?? 0) + 1);
+    if (reserveMode && !reserved && user) setCartQty(c.id, (cart.get(c.id) ?? 0) + 1);
     else setDetail(c);
   }
 
@@ -181,7 +278,9 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
         <p className="text-sm text-red-400">{error}</p>
       ) : (
         <>
-          {reserveMode && !reserved && (
+          {reserveMode && !reserved && !user && <SignInPanel shareId={shareId} />}
+
+          {reserveMode && !reserved && user && (
             <div className="space-y-2 rounded-md bg-zinc-900 p-3 ring-1 ring-emerald-900/60">
               {cartCount === 0 ? (
                 <p className="text-sm text-zinc-400">
@@ -334,13 +433,13 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
             <ResultsGrid
               cards={results}
               onSelect={onCardClick}
-              selected={reserveMode && !reserved ? cart : undefined}
+              selected={reserveMode && !reserved && user ? cart : undefined}
             />
           ) : (
             <ResultsTable
               cards={results}
               onSelect={onCardClick}
-              selected={reserveMode && !reserved ? cart : undefined}
+              selected={reserveMode && !reserved && user ? cart : undefined}
             />
           )}
         </>

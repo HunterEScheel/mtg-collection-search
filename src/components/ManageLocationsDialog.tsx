@@ -134,7 +134,7 @@ export function ManageLocationsDialog({ locations, cards, userId, onChanged, onC
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md space-y-4 rounded-xl bg-zinc-900 p-6 ring-1 ring-zinc-700"
+        className="max-h-[85vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-xl bg-zinc-900 p-6 ring-1 ring-zinc-700"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
