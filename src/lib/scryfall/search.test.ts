@@ -144,7 +144,7 @@ describe('search', () => {
     expect(names(search('not:foil t:instant', FIXTURE))).toEqual(['Lightning Bolt']);
   });
 
-  it('is:vanilla / frenchvanilla / unfinity', () => {
+  it('is:vanilla / frenchvanilla', () => {
     const extra = [
       ...FIXTURE,
       card({ name: 'Wind Drake', s: { type_line: 'Creature — Drake', oracle_text: 'Flying (This creature can only be blocked by creatures with flying.)', keywords: ['Flying'], power: '2', toughness: '2' } }),
@@ -154,7 +154,7 @@ describe('search', () => {
     // vanilla: no ability text at all
     expect(names(search('is:vanilla', extra))).toEqual(['Grizzly Bears', 'Silly Goose', 'Tarmogoyf']);
     expect(names(search('is:frenchvanilla', extra))).toEqual(['Knight Errant', 'Wind Drake']);
-    expect(names(search('is:unfinity', extra))).toEqual(['Silly Goose']);
+    expect(names(search('s:unf', extra))).toEqual(['Silly Goose']);
     // Aurelia has 'Mentor.' oracle text but no keywords array entry -> not french vanilla
     expect(names(search('is:frenchvanilla c:rw', extra))).toEqual([]);
   });
@@ -207,6 +207,26 @@ describe('search', () => {
     // Mill action word counts even without the word "library".
     const miller = card({ name: 'Mind Sculpt', s: { type_line: 'Sorcery', oracle_text: 'Target opponent mills seven cards.' } });
     expect(names(search('zone:library', [miller]))).toEqual(['Mind Sculpt']);
+  });
+
+  it('commander: matches identity subset + commander legality', () => {
+    const legal = { commander: 'legal' };
+    const extra = [
+      card({ name: 'Cultivate', s: { type_line: 'Sorcery', color_identity: ['G'], legalities: legal } }),
+      card({ name: 'Growth Spiral', s: { type_line: 'Instant', color_identity: ['G', 'U'], legalities: legal } }),
+      card({ name: 'Sol Ring', s: { type_line: 'Artifact', color_identity: [], legalities: legal } }),
+      card({ name: 'Primeval Titan', s: { type_line: 'Creature — Giant', color_identity: ['G'], legalities: { commander: 'banned' } } }),
+      card({ name: 'Kird Ape', s: { type_line: 'Creature — Ape', color_identity: ['R'], legalities: legal } }),
+    ];
+    // Mono-green deck: green + colorless cards, banned cards excluded.
+    expect(names(search('commander:g', extra))).toEqual(['Cultivate', 'Sol Ring']);
+    // Simic deck picks up the GU card too.
+    expect(names(search('commander:gu', extra))).toEqual([
+      'Cultivate', 'Growth Spiral', 'Sol Ring',
+    ]);
+    expect(names(search('commander:c', extra))).toEqual(['Sol Ring']);
+    // FIXTURE cards have no legalities -> never commander-legal.
+    expect(search('commander:wubrg', FIXTURE)).toHaveLength(0);
   });
 
   it('malformed queries throw QueryError', () => {

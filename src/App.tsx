@@ -13,6 +13,7 @@ import { ImportDialog } from './components/ImportDialog';
 import { MoveDialog } from './components/MoveDialog';
 import { ManageLocationsDialog } from './components/ManageLocationsDialog';
 import { CardDetail } from './components/CardDetail';
+import { SearchLegend } from './components/SearchLegend';
 import { TokenTypesPanel } from './components/TokenTypesPanel';
 import type { OwnedCard } from './types';
 
@@ -24,6 +25,7 @@ function Main({ user }: { user: User }) {
   const [moving, setMoving] = useState(false);
   const [managing, setManaging] = useState(false);
   const [detail, setDetail] = useState<OwnedCard | null>(null);
+  const [showLegend, setShowLegend] = useState(false);
 
   const { cards, locations, loading, error: loadError, reload } = useAllCards();
   const { results, error: queryError } = useSearch(cards, query, filters);
@@ -83,6 +85,15 @@ function Main({ user }: { user: User }) {
 
       <div className="flex items-start gap-3">
         <SearchBar query={query} onChange={setQuery} error={queryError} />
+        <button
+          onClick={() => setShowLegend((v) => !v)}
+          title="Search syntax"
+          className={`rounded-md px-3 py-2 text-sm font-semibold ring-1 ${
+            showLegend ? 'bg-indigo-600 ring-indigo-500' : 'bg-zinc-800 ring-zinc-700 hover:bg-zinc-700'
+          }`}
+        >
+          ?
+        </button>
         <div className="flex rounded-md ring-1 ring-zinc-700">
           {(['grid', 'table'] as const).map((v) => (
             <button
@@ -148,6 +159,8 @@ function Main({ user }: { user: User }) {
       {detail && (
         <CardDetail card={detail} copies={detailCopies} onClose={() => setDetail(null)} />
       )}
+
+      {showLegend && <SearchLegend onClose={() => setShowLegend(false)} />}
     </div>
   );
 }

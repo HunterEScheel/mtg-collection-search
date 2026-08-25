@@ -154,7 +154,6 @@ function isFrenchVanilla(c: OwnedCard): boolean {
 const IS_PREDICATES: Record<string, Predicate> = {
   vanilla: (c) => isCreature(c) && abilityLines(c).length === 0,
   frenchvanilla: isFrenchVanilla,
-  unfinity: (c) => (c.scryfall?.set_code ?? c.set_code ?? '').toLowerCase() === 'unf',
   foil: (c) => c.foil !== null && c.foil !== 'normal',
   nonfoil: (c) => c.foil === null || c.foil === 'normal',
   etched: (c) => c.foil === 'etched',
@@ -304,8 +303,20 @@ const zoneField = (op: Op, value: string): Predicate => {
   };
 };
 
+/**
+ * Scryfall's `commander:` — cards that fit in a commander deck of the given
+ * color identity: their identity is a subset of the colors AND they are
+ * legal in the commander format.
+ */
+const commanderField = (op: Op, value: string): Predicate => {
+  if (op !== ':' && op !== '=') throw new QueryError(`Operator "${op}" not valid for commander`);
+  const idPred = colorField((c) => c.scryfall?.color_identity ?? null, '<=')(':', value);
+  return (c) => idPred(c) && c.scryfall?.legalities?.commander === 'legal';
+};
+
 const REGISTRY: Record<string, FieldBuilder> = {
   zone: zoneField,
+  commander: commanderField,
   spawns: spawnsField,
   t: textContainsField((c) => c.scryfall?.type_line ?? null),
   type: textContainsField((c) => c.scryfall?.type_line ?? null),

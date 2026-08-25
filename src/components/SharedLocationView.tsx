@@ -6,6 +6,7 @@ import { SearchBar } from './SearchBar';
 import { ResultsGrid } from './ResultsGrid';
 import { ResultsTable } from './ResultsTable';
 import { CardDetail } from './CardDetail';
+import { SearchLegend } from './SearchLegend';
 import type { ManaBoxRow, OwnedCard, ScryfallCard } from '../types';
 
 interface SharedPayload {
@@ -26,6 +27,7 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [detail, setDetail] = useState<OwnedCard | null>(null);
+  const [showLegend, setShowLegend] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +79,15 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
         <>
           <div className="flex items-start gap-3">
             <SearchBar query={query} onChange={setQuery} error={queryError} />
+            <button
+              onClick={() => setShowLegend((v) => !v)}
+              title="Search syntax"
+              className={`rounded-md px-3 py-2 text-sm font-semibold ring-1 ${
+                showLegend ? 'bg-indigo-600 ring-indigo-500' : 'bg-zinc-800 ring-zinc-700 hover:bg-zinc-700'
+              }`}
+            >
+              ?
+            </button>
             <div className="flex rounded-md ring-1 ring-zinc-700">
               {(['grid', 'table'] as const).map((v) => (
                 <button
@@ -106,6 +117,8 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
       {detail && (
         <CardDetail card={detail} copies={detailCopies} onClose={() => setDetail(null)} />
       )}
+
+      {showLegend && <SearchLegend onClose={() => setShowLegend(false)} />}
     </div>
   );
 }
