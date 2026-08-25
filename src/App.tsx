@@ -13,6 +13,7 @@ import { ImportDialog } from './components/ImportDialog';
 import { MoveDialog } from './components/MoveDialog';
 import { ManageLocationsDialog } from './components/ManageLocationsDialog';
 import { CardDetail } from './components/CardDetail';
+import { TokenTypesPanel } from './components/TokenTypesPanel';
 import type { OwnedCard } from './types';
 
 function Main({ user }: { user: User }) {
@@ -109,6 +110,7 @@ function Main({ user }: { user: User }) {
           <p className="text-sm text-zinc-400">
             {results.length} cards / {totals.copies} copies / ${totals.value.toFixed(2)}
           </p>
+          <TokenTypesPanel cards={results} onSearch={setQuery} />
           {view === 'grid' ? (
             <ResultsGrid cards={results} onSelect={setDetail} />
           ) : (
