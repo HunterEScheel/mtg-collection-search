@@ -54,7 +54,7 @@ function Main({ user }: { user: User }) {
           onClick={() => setImporting(true)}
           className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium hover:bg-indigo-500"
         >
-          Import CSV
+          Import Collection
         </button>
         {locations.length >= 1 && (
           <button
