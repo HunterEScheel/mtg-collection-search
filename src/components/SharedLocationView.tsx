@@ -3,6 +3,8 @@ import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { ownedPrice } from '../lib/scryfall';
 import { useSearch, EMPTY_FILTERS } from '../hooks/useSearch';
+import { groupVariants } from '../lib/groupVariants';
+import { toMoxfieldList } from '../lib/moxfieldExport';
 import { SearchBar } from './SearchBar';
 import { ResultsGrid } from './ResultsGrid';
 import { ResultsTable } from './ResultsTable';
@@ -113,6 +115,8 @@ function SignInPanel({ shareId }: { shareId: string }) {
 export function SharedLocationView({ shareId }: { shareId: string }) {
   const [name, setName] = useState<string | null>(null);
   const [forSale, setForSale] = useState(false);
+  const [isReservation, setIsReservation] = useState(false);
+  const [listCopied, setListCopied] = useState(false);
   const [cards, setCards] = useState<OwnedCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -155,6 +159,7 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
           const payload = data as SharedPayload;
           setName(payload.name);
           setForSale(payload.for_sale);
+          setIsReservation(payload.reserved);
           setCards(payload.cards.map((c) => ({ ...c, location_name: payload.name })));
         }
         setLoading(false);
@@ -163,6 +168,13 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
   }, [shareId, reloadKey]);
 
   const { results, error: queryError } = useSearch(cards, query, EMPTY_FILTERS);
+  // Combine foil/condition variants for browsing — but NOT in reserve mode,
+  // where buyers must pick the exact variant row they want.
+  const picking = reserveMode && !reserved && !!user;
+  const displayResults = useMemo(
+    () => (picking ? results : groupVariants(results)),
+    [picking, results],
+  );
 
   const totals = useMemo(() => {
     const copies = results.reduce((n, c) => n + c.quantity, 0);
@@ -243,6 +255,25 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
           <span className="rounded-full bg-emerald-950/60 px-2.5 py-0.5 text-xs text-emerald-400 ring-1 ring-emerald-900">
             for sale
           </span>
+        )}
+        {isReservation && (
+          <>
+            <span className="rounded-full bg-amber-950/60 px-2.5 py-0.5 text-xs text-amber-400 ring-1 ring-amber-900">
+              reservation
+            </span>
+            <button
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(toMoxfieldList(cards));
+                  setListCopied(true);
+                  setTimeout(() => setListCopied(false), 2000);
+                } catch { /* clipboard unavailable */ }
+              }}
+              className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm font-medium ring-1 ring-zinc-700 hover:bg-zinc-700"
+            >
+              {listCopied ? 'Copied!' : 'Copy list for Moxfield'}
+            </button>
+          </>
         )}
         {forSale && !reserved && (
           <button
@@ -415,19 +446,19 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
           </div>
 
           <p className="text-sm text-zinc-400">
-            {results.length} cards / {totals.copies} copies / ${totals.value.toFixed(2)}
+            {displayResults.length} cards / {totals.copies} copies / ${totals.value.toFixed(2)}
           </p>
           {view === 'grid' ? (
             <ResultsGrid
-              cards={results}
+              cards={displayResults}
               onSelect={onCardClick}
-              selected={reserveMode && !reserved && user ? cart : undefined}
+              selected={picking ? cart : undefined}
             />
           ) : (
             <ResultsTable
-              cards={results}
+              cards={displayResults}
               onSelect={onCardClick}
-              selected={reserveMode && !reserved && user ? cart : undefined}
+              selected={picking ? cart : undefined}
             />
           )}
         </>

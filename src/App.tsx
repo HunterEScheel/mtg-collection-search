@@ -3,6 +3,7 @@ import type { User } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import { ownedPrice } from './lib/scryfall';
 import { useAllCards } from './hooks/useAllCards';
+import { groupVariants } from './lib/groupVariants';
 import { useSearch, EMPTY_FILTERS, type UiFilters } from './hooks/useSearch';
 import { AuthGate } from './components/AuthGate';
 import { SearchBar } from './components/SearchBar';
@@ -29,6 +30,9 @@ function Main({ user }: { user: User }) {
 
   const { cards, locations, loading, error: loadError, reload } = useAllCards();
   const { results, error: queryError } = useSearch(cards, query, filters);
+  // One entry per printing+location: foil/condition variants combine for
+  // display; the card detail still lists every variant separately.
+  const displayResults = useMemo(() => groupVariants(results), [results]);
 
   const locationNames = useMemo(
     () => locations.map((l) => l.name).sort(),
@@ -119,13 +123,13 @@ function Main({ user }: { user: User }) {
       ) : (
         <>
           <p className="text-sm text-zinc-400">
-            {results.length} cards / {totals.copies} copies / ${totals.value.toFixed(2)}
+            {displayResults.length} cards / {totals.copies} copies / ${totals.value.toFixed(2)}
           </p>
           <TokenTypesPanel cards={results} onSearch={setQuery} />
           {view === 'grid' ? (
-            <ResultsGrid cards={results} onSelect={setDetail} />
+            <ResultsGrid cards={displayResults} onSelect={setDetail} />
           ) : (
-            <ResultsTable cards={results} onSelect={setDetail} />
+            <ResultsTable cards={displayResults} onSelect={setDetail} />
           )}
         </>
       )}
