@@ -162,7 +162,13 @@ function Main({ user }: { user: User }) {
       )}
 
       {detail && (
-        <CardDetail card={detail} copies={detailCopies} onClose={() => setDetail(null)} />
+        <CardDetail
+          card={detail}
+          copies={detailCopies}
+          locations={locations.filter((l) => l.user_id === user.id)}
+          onMoved={() => { setDetail(null); reload(); }}
+          onClose={() => setDetail(null)}
+        />
       )}
 
       {showLegend && <SearchLegend onClose={() => setShowLegend(false)} />}
