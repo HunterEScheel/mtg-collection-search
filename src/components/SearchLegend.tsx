@@ -49,6 +49,7 @@ const GROUPS: Group[] = [
       { term: 'qty: / quantity:', desc: 'Copies owned (qty>=2)' },
       { term: 'loc: / location:', desc: 'Location name contains text' },
       { term: 'binder:', desc: 'Binder name from ManaBox/Dragon Shield imports' },
+      { term: 'in:', desc: 'Card also exists (by name) in that location (loc:deck in:bulk); -in: negates' },
       { term: 'usd / price:', desc: 'Price of your copy — foils use foil price (usd<5)' },
     ],
   },

@@ -305,6 +305,54 @@ const zoneField = (op: Op, value: string): Predicate => {
   };
 };
 
+// ---- in: / notin: (cross-location lookups) ----
+
+// These fields need to see the whole collection, not just the candidate card.
+// The search entry points set the pool before compiling; the location -> card
+// name index is built lazily and cached until the pool changes.
+let searchPool: OwnedCard[] = [];
+let poolIndex: Map<string, Set<string>> | null = null;
+
+export function setSearchPool(cards: OwnedCard[]): void {
+  if (cards !== searchPool) {
+    searchPool = cards;
+    poolIndex = null;
+  }
+}
+
+function getPoolIndex(): Map<string, Set<string>> {
+  if (!poolIndex) {
+    poolIndex = new Map();
+    for (const c of searchPool) {
+      const loc = c.location_name.toLowerCase();
+      let names = poolIndex.get(loc);
+      if (!names) {
+        names = new Set();
+        poolIndex.set(loc, names);
+      }
+      names.add((c.scryfall?.name ?? c.card_name).toLowerCase());
+    }
+  }
+  return poolIndex;
+}
+
+/**
+ * `in:trades` — the card (by name, any printing) also exists in a location
+ * whose name contains the value; `-in:` negates. Combine with `loc:` to
+ * compare two locations, e.g. `loc:deck -in:bulk`.
+ */
+function inField(op: Op, value: string): Predicate {
+  if (op !== ':' && op !== '=') throw new QueryError(`Operator "${op}" not valid for in:`);
+  const needle = value.toLowerCase();
+  return (c) => {
+    const name = (c.scryfall?.name ?? c.card_name).toLowerCase();
+    for (const [loc, names] of getPoolIndex()) {
+      if (loc.includes(needle) && names.has(name)) return true;
+    }
+    return false;
+  };
+}
+
 /**
  * Scryfall's `commander:` — cards that fit in a commander deck of the given
  * color identity: their identity is a subset of the colors AND they are
@@ -319,6 +367,7 @@ const commanderField = (op: Op, value: string): Predicate => {
 const REGISTRY: Record<string, FieldBuilder> = {
   zone: zoneField,
   commander: commanderField,
+  in: inField,
   spawns: spawnsField,
   t: textContainsField((c) => c.scryfall?.type_line ?? null),
   type: textContainsField((c) => c.scryfall?.type_line ?? null),

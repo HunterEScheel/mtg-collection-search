@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { OwnedCard } from '../types';
-import { compileQuery, QueryError } from '../lib/scryfall';
+import { compileQuery, QueryError, setSearchPool } from '../lib/scryfall';
 
 export interface UiFilters {
   minQty: number | null;
@@ -20,6 +20,8 @@ export function useSearch(cards: OwnedCard[], query: string, filters: UiFilters)
   }, [query]);
 
   return useMemo(() => {
+    // in:/notin: fields look up card names across the whole pool.
+    setSearchPool(cards);
     let pred: (c: OwnedCard) => boolean;
     try {
       pred = compileQuery(debounced);

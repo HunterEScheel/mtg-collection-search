@@ -239,6 +239,26 @@ describe('search', () => {
     expect(search('commander:wubrg', FIXTURE)).toHaveLength(0);
   });
 
+  it('in:/-in: cross-location lookups', () => {
+    const extra = [
+      ...FIXTURE,
+      // Lightning Bolt also lives in Storage (different printing is fine — match is by name).
+      card({ name: 'Lightning Bolt', location_name: 'Storage', set_code: 'm11', quantity: 1 }),
+    ];
+    // Cards in Main that also exist in Storage.
+    expect(names(search('loc:main in:storage', extra))).toEqual(['Lightning Bolt']);
+    // Cards in Trade Box that do NOT exist in Main.
+    expect(names(search('loc:"Trade Box" -in:main', extra))).toEqual([
+      'Aurelia, Exemplar of Justice', 'Goblin Guide',
+    ]);
+    // Everything in Storage is (trivially) in Storage.
+    expect(names(search('loc:storage in:storage', extra))).toEqual([
+      'Command Tower', 'Lightning Bolt',
+    ]);
+    // -in: works as the negation too.
+    expect(search('loc:main -in:main', extra)).toHaveLength(0);
+  });
+
   it('malformed queries throw QueryError', () => {
     expect(() => search('t:creature (c:r', FIXTURE)).toThrow(QueryError);
     expect(() => search('o:"unclosed', FIXTURE)).toThrow(QueryError);
