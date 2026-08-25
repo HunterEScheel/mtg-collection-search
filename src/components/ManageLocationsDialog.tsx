@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Location, OwnedCard } from '../types';
+import { computeWrites, executeMove } from '../lib/move/executeMove';
 import { DeleteLocationDialog } from './DeleteLocationDialog';
 
 interface Props {
@@ -21,6 +22,8 @@ export function ManageLocationsDialog({ locations, cards, userId, onChanged, onC
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [transferConfirmId, setTransferConfirmId] = useState<string | null>(null);
+  const [mergingId, setMergingId] = useState<string | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState('');
 
   const countFor = (id: string) => cards.filter((c) => c.collection_id === id).length;
 
@@ -87,6 +90,27 @@ export function ManageLocationsDialog({ locations, cards, userId, onChanged, onC
       return;
     }
     onChanged();
+  }
+
+  /** Move every card from `loc` into the target (natural-key merge), then delete `loc`. */
+  async function merge(loc: Location, targetId: string) {
+    if (!targetId || targetId === loc.id) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const sourceRows = cards.filter((c) => c.collection_id === loc.id);
+      const destCards = cards.filter((c) => c.collection_id === targetId);
+      const transfers = sourceRows.map((r) => ({ sourceRow: r, qty: r.quantity }));
+      await executeMove(computeWrites(transfers, destCards, targetId));
+      const { error } = await supabase.from('collections').delete().eq('id', loc.id);
+      if (error) throw new Error(error.message);
+      setMergingId(null);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function saveRename(loc: Location) {
@@ -191,6 +215,15 @@ export function ManageLocationsDialog({ locations, cards, userId, onChanged, onC
                         rename
                       </button>
                       <button
+                        onClick={() => {
+                          setMergingId(mergingId === loc.id ? null : loc.id);
+                          setMergeTargetId('');
+                        }}
+                        className="text-xs text-zinc-400 underline hover:text-zinc-200"
+                      >
+                        merge into…
+                      </button>
+                      <button
                         onClick={() => setDeleting(loc)}
                         className="text-xs text-red-400 underline hover:text-red-300"
                       >
@@ -201,6 +234,34 @@ export function ManageLocationsDialog({ locations, cards, userId, onChanged, onC
                 </>
               )}
               </div>
+              {mergingId === loc.id && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-400">Merge all cards into:</span>
+                  <select
+                    value={mergeTargetId}
+                    onChange={(e) => setMergeTargetId(e.target.value)}
+                    className="min-w-0 flex-1 rounded bg-zinc-900 px-2 py-1 text-xs ring-1 ring-zinc-600"
+                  >
+                    <option value="">— pick a location —</option>
+                    {locations
+                      .filter((l) => l.id !== loc.id && l.user_id === userId)
+                      .map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                  <button
+                    onClick={() => merge(loc, mergeTargetId)}
+                    disabled={busy || !mergeTargetId}
+                    className="text-xs text-amber-400 underline hover:text-amber-300 disabled:opacity-40"
+                  >
+                    {busy ? 'merging…' : `merge & delete “${loc.name}”`}
+                  </button>
+                  <button
+                    onClick={() => setMergingId(null)}
+                    className="text-xs text-zinc-400 hover:text-zinc-200"
+                  >
+                    cancel
+                  </button>
+                </div>
+              )}
               {owned && (
               <div className="flex items-center gap-2">
                 {loc.share_id ? (

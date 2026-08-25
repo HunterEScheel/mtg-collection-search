@@ -286,9 +286,17 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
             {results.length} cards / {totals.copies} copies / ${totals.value.toFixed(2)}
           </p>
           {view === 'grid' ? (
-            <ResultsGrid cards={results} onSelect={onCardClick} />
+            <ResultsGrid
+              cards={results}
+              onSelect={onCardClick}
+              selected={reserveMode && !reserved ? cart : undefined}
+            />
           ) : (
-            <ResultsTable cards={results} onSelect={onCardClick} />
+            <ResultsTable
+              cards={results}
+              onSelect={onCardClick}
+              selected={reserveMode && !reserved ? cart : undefined}
+            />
           )}
         </>
       )}

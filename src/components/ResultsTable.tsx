@@ -7,6 +7,8 @@ type SortKey = 'name' | 'set' | 'foil' | 'condition' | 'qty' | 'location' | 'pri
 interface Props {
   cards: OwnedCard[];
   onSelect: (card: OwnedCard) => void;
+  /** Card row id -> copies selected (e.g. for reservation); highlights the row. */
+  selected?: Map<number, number>;
 }
 
 const getters: Record<SortKey, (c: OwnedCard) => string | number> = {
@@ -19,7 +21,7 @@ const getters: Record<SortKey, (c: OwnedCard) => string | number> = {
   price: (c) => ownedPrice(c) ?? -1,
 };
 
-export function ResultsTable({ cards, onSelect }: Props) {
+export function ResultsTable({ cards, onSelect, selected }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [asc, setAsc] = useState(true);
 
@@ -63,13 +65,23 @@ export function ResultsTable({ cards, onSelect }: Props) {
         <tbody>
           {sorted.map((c) => {
             const price = ownedPrice(c);
+            const picked = selected?.get(c.id) ?? 0;
             return (
               <tr
                 key={c.id}
                 onClick={() => onSelect(c)}
-                className="cursor-pointer border-t border-zinc-800 hover:bg-zinc-900"
+                className={`cursor-pointer border-t border-zinc-800 ${
+                  picked > 0 ? 'bg-emerald-950/40 hover:bg-emerald-950/60' : 'hover:bg-zinc-900'
+                }`}
               >
-                <td className="px-3 py-1.5">{c.scryfall?.name ?? c.card_name}</td>
+                <td className="px-3 py-1.5">
+                  {c.scryfall?.name ?? c.card_name}
+                  {picked > 0 && (
+                    <span className="ml-2 rounded bg-emerald-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+                      ✓ {picked}
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-1.5 uppercase text-zinc-400">{c.set_code}</td>
                 <td className="px-3 py-1.5 text-zinc-400">{c.collector_number}</td>
                 <td className="px-3 py-1.5 text-zinc-400">{c.foil === 'normal' ? '' : c.foil}</td>
