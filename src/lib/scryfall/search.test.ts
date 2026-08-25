@@ -257,6 +257,9 @@ describe('search', () => {
     ]);
     // -in: works as the negation too.
     expect(search('loc:main -in:main', extra)).toHaveLength(0);
+    // in:all = anywhere in the collection (trivially true for owned cards).
+    expect(search('in:all', extra)).toHaveLength(extra.length);
+    expect(search('-in:all', extra)).toHaveLength(0);
   });
 
   it('malformed queries throw QueryError', () => {

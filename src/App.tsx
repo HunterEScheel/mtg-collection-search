@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import { ownedPrice } from './lib/scryfall';
@@ -16,6 +16,7 @@ import { ManageLocationsDialog } from './components/ManageLocationsDialog';
 import { CardDetail } from './components/CardDetail';
 import { CardContextMenu, type CardMenuState } from './components/CardContextMenu';
 import { computeWrites, executeMove } from './lib/move/executeMove';
+import { searchScryfallRemote, type RemoteSearchResult } from './lib/scryfall/remoteSearch';
 import { SearchLegend } from './components/SearchLegend';
 import { TokenTypesPanel } from './components/TokenTypesPanel';
 import type { OwnedCard } from './types';
@@ -32,12 +33,44 @@ function Main({ user }: { user: User }) {
   const [cardMenu, setCardMenu] = useState<CardMenuState | null>(null);
   const [menuBusy, setMenuBusy] = useState(false);
   const [menuError, setMenuError] = useState<string | null>(null);
+  const [onlyMine, setOnlyMine] = useState(true);
+  const [remote, setRemote] = useState<RemoteSearchResult | null>(null);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  const [remoteError, setRemoteError] = useState<string | null>(null);
 
   const { cards, locations, loading, error: loadError, reload } = useAllCards();
   const { results, error: queryError } = useSearch(cards, query, filters);
   // One entry per printing+location: foil/condition variants combine for
   // display; the card detail still lists every variant separately.
   const displayResults = useMemo(() => groupVariants(results), [results]);
+
+  const ownedByName = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of cards) {
+      const key = (c.scryfall?.name ?? c.card_name).toLowerCase();
+      m.set(key, (m.get(key) ?? 0) + c.quantity);
+    }
+    return m;
+  }, [cards]);
+
+  // Scryfall-wide search when "My collection only" is unchecked.
+  useEffect(() => {
+    if (onlyMine) return;
+    if (query.trim() === '') {
+      setRemote(null);
+      setRemoteError(null);
+      return;
+    }
+    const t = setTimeout(() => {
+      setRemoteLoading(true);
+      setRemoteError(null);
+      searchScryfallRemote(query, ownedByName)
+        .then(setRemote)
+        .catch((e: Error) => { setRemote(null); setRemoteError(e.message); })
+        .finally(() => setRemoteLoading(false));
+    }, 600);
+    return () => clearTimeout(t);
+  }, [onlyMine, query, ownedByName]);
 
   const locationNames = useMemo(
     () => locations.map((l) => l.name).sort(),
@@ -119,7 +152,15 @@ function Main({ user }: { user: User }) {
       </header>
 
       <div className="flex items-start gap-3">
-        <SearchBar query={query} onChange={setQuery} error={queryError} />
+        <SearchBar query={query} onChange={setQuery} error={onlyMine ? queryError : remoteError} />
+        <label className="flex items-center gap-1.5 whitespace-nowrap py-2 text-sm text-zinc-300">
+          <input
+            type="checkbox"
+            checked={onlyMine}
+            onChange={(e) => setOnlyMine(e.target.checked)}
+          />
+          My collection only
+        </label>
         <button
           onClick={() => setShowLegend((v) => !v)}
           title="Search syntax"
@@ -144,11 +185,34 @@ function Main({ user }: { user: User }) {
         </div>
       </div>
 
-      <FilterBar filters={filters} onChange={setFilters} locationNames={locationNames} />
+      {onlyMine && (
+        <FilterBar filters={filters} onChange={setFilters} locationNames={locationNames} />
+      )}
 
       {loadError && <p className="text-sm text-red-400">{loadError}</p>}
       {loading ? (
         <p className="text-sm text-zinc-400">Loading collection…</p>
+      ) : !onlyMine ? (
+        <>
+          {remoteLoading ? (
+            <p className="text-sm text-zinc-400">Searching Scryfall…</p>
+          ) : remote ? (
+            <p className="text-sm text-zinc-400">
+              {remote.cards.length} of {remote.total} Scryfall results
+              {remote.truncated ? ' (first pages only — refine the search)' : ''} — ×N shows
+              copies you own; add -in:all for cards you don't have
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-400">
+              Searching all of Scryfall — type a query (e.g. t:goblin cmc&lt;=2 -in:all).
+            </p>
+          )}
+          {remote && (view === 'grid' ? (
+            <ResultsGrid cards={remote.cards} onSelect={setDetail} />
+          ) : (
+            <ResultsTable cards={remote.cards} onSelect={setDetail} />
+          ))}
+        </>
       ) : locations.length === 0 ? (
         <p className="text-sm text-zinc-400">Import a CSV to create your first location.</p>
       ) : (

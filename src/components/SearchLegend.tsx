@@ -50,6 +50,7 @@ const GROUPS: Group[] = [
       { term: 'loc: / location:', desc: 'Location name contains text' },
       { term: 'binder:', desc: 'Binder name from ManaBox/Dragon Shield imports' },
       { term: 'in:', desc: 'Card also exists (by name) in that location (loc:deck in:bulk); -in: negates' },
+      { term: 'in:all', desc: 'Owned anywhere. With "My collection only" unchecked, -in:all finds Scryfall cards you don\'t have' },
       { term: 'usd / price:', desc: 'Price of your copy — foils use foil price (usd<5)' },
     ],
   },

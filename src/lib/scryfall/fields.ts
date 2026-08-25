@@ -339,15 +339,17 @@ function getPoolIndex(): Map<string, Set<string>> {
 /**
  * `in:trades` — the card (by name, any printing) also exists in a location
  * whose name contains the value; `-in:` negates. Combine with `loc:` to
- * compare two locations, e.g. `loc:deck -in:bulk`.
+ * compare two locations, e.g. `loc:deck -in:bulk`. `in:all` matches when the
+ * card exists anywhere in the collection (useful with Scryfall-wide search).
  */
 function inField(op: Op, value: string): Predicate {
   if (op !== ':' && op !== '=') throw new QueryError(`Operator "${op}" not valid for in:`);
   const needle = value.toLowerCase();
+  const anywhere = needle === 'all';
   return (c) => {
     const name = (c.scryfall?.name ?? c.card_name).toLowerCase();
     for (const [loc, names] of getPoolIndex()) {
-      if (loc.includes(needle) && names.has(name)) return true;
+      if ((anywhere || loc.includes(needle)) && names.has(name)) return true;
     }
     return false;
   };
