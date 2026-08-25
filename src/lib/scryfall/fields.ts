@@ -236,7 +236,76 @@ const spawnsField = (op: Op, value: string): Predicate => {
   return (c) => re.test(c.scryfall?.oracle_text ?? '');
 };
 
+// ---- zone: ----
+
+// Keywords that interact with a zone even when the zone is only named in
+// reminder text (which some data omits) — e.g. all the cast-from-graveyard
+// mechanics count as graveyard interaction.
+const GRAVEYARD_KEYWORDS = [
+  'flashback', 'escape', 'disturb', 'embalm', 'eternalize', 'unearth',
+  'jump-start', 'retrace', 'dredge', 'scavenge', 'delve', 'aftermath',
+  'encore', 'recover', 'threshold', 'delirium', 'undergrowth', 'flareback',
+];
+const HAND_KEYWORDS = ['madness', 'cycling', 'channel', 'evoke', 'discard', 'reveal'];
+const LIBRARY_KEYWORDS = [
+  'mill', 'scry', 'surveil', 'explore', 'cascade', 'discover', 'transmute',
+  'miracle', 'ripple', 'fateseal', 'clash', 'learn',
+];
+const COMMAND_KEYWORDS = ['eminence', 'commander ninjutsu', 'partner'];
+
+const ZONE_ALIAS: Record<string, string> = {
+  graveyard: 'graveyard', grave: 'graveyard', gy: 'graveyard', yard: 'graveyard',
+  hand: 'hand',
+  command: 'command', commander: 'command', commandzone: 'command',
+  battlefield: 'battlefield', bf: 'battlefield', play: 'battlefield',
+  library: 'library', lib: 'library', deck: 'library',
+};
+
+/**
+ * `zone:graveyard` etc. — cards whose effects interact with that zone:
+ * scaling on its contents, triggers on cards entering/leaving it, moving
+ * cards out of it, or being castable/activatable from it.
+ */
+const zoneField = (op: Op, value: string): Predicate => {
+  if (op !== ':' && op !== '=') throw new QueryError(`Operator "${op}" not valid for zone`);
+  const zone = ZONE_ALIAS[value.toLowerCase().replaceAll(' ', '')];
+  if (!zone) {
+    throw new QueryError(
+      `Unknown zone "${value}" (try graveyard, hand, command, battlefield, library)`,
+    );
+  }
+  const hasKeyword = (c: OwnedCard, list: string[]) => {
+    const kws = (c.scryfall?.keywords ?? []).map((k) => k.toLowerCase());
+    return kws.some((k) => list.includes(k));
+  };
+  return (c) => {
+    const o = (c.scryfall?.oracle_text ?? '').toLowerCase();
+    switch (zone) {
+      case 'graveyard':
+        return o.includes('graveyard') || hasKeyword(c, GRAVEYARD_KEYWORDS);
+      case 'hand':
+        return o.includes('hand') || hasKeyword(c, HAND_KEYWORDS);
+      case 'command':
+        return o.includes('command zone') || o.includes('commander')
+          || hasKeyword(c, COMMAND_KEYWORDS);
+      case 'battlefield':
+        return o.includes('battlefield') || o.includes('enters') || o.includes('leaves');
+      case 'library':
+        // "library"/"libraries" covers tutors (own and opponents'), reveal /
+        // look at / cast from the top of a library, and shuffle effects.
+        // Draw and mill are library interactions whose text often omits the
+        // word, so match the action words too.
+        return o.includes('library') || o.includes('libraries')
+          || /\bdraws?\b|\bdrawn\b|\bmills?\b|\bmilled\b/.test(o)
+          || hasKeyword(c, LIBRARY_KEYWORDS);
+      default:
+        return false;
+    }
+  };
+};
+
 const REGISTRY: Record<string, FieldBuilder> = {
+  zone: zoneField,
   spawns: spawnsField,
   t: textContainsField((c) => c.scryfall?.type_line ?? null),
   type: textContainsField((c) => c.scryfall?.type_line ?? null),

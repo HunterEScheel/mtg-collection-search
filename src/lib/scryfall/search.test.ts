@@ -172,6 +172,43 @@ describe('search', () => {
     expect(() => search('spawns>goblin', extra)).toThrow(QueryError);
   });
 
+  it('zone: finds cards interacting with a zone', () => {
+    const extra = [
+      ...FIXTURE,
+      card({ name: 'Reassembling Skeleton', s: { type_line: 'Creature — Skeleton Warrior', oracle_text: '{1}{B}: Return Reassembling Skeleton from your graveyard to the battlefield tapped.' } }),
+      card({ name: 'Deep Analysis', s: { type_line: 'Sorcery', oracle_text: 'Target player draws two cards.\nFlashback—{1}{U}, Pay 3 life.', keywords: ['Flashback'] } }),
+      card({ name: 'Windfall', s: { type_line: 'Sorcery', oracle_text: 'Each player discards their hand, then draws cards equal to the greatest number of cards a player discarded this way.' } }),
+      card({ name: 'Command Beacon', s: { type_line: 'Land', oracle_text: '{T}, Sacrifice Command Beacon: Put your commander into your hand from the command zone.' } }),
+    ];
+    // Oracle text mentions the graveyard, or a cast-from-graveyard keyword.
+    expect(names(search('zone:graveyard', extra))).toEqual([
+      'Deep Analysis', 'Reassembling Skeleton',
+    ]);
+    expect(names(search('zone:gy t:creature', extra))).toEqual(['Reassembling Skeleton']);
+    expect(names(search('zone:hand', extra))).toEqual(['Command Beacon', 'Windfall']);
+    expect(names(search('zone:command', extra))).toContain('Command Beacon');
+    expect(names(search('zone:battlefield', extra))).toContain('Reassembling Skeleton');
+    expect(() => search('zone:exile', extra)).toThrow(QueryError);
+  });
+
+  it('zone:library finds library interaction', () => {
+    const extra = [
+      ...FIXTURE,
+      card({ name: 'Demonic Tutor', s: { type_line: 'Sorcery', oracle_text: 'Search your library for a card, put that card into your hand, then shuffle.' } }),
+      card({ name: 'Opt', s: { type_line: 'Instant', oracle_text: 'Scry 1.\nDraw a card.', keywords: ['Scry'] } }),
+    ];
+    // "Search your library" text, or a library keyword like Scry with the
+    // zone only in reminder text.
+    // Goblin Guide reveals the top card of a library; Divination draws.
+    expect(names(search('zone:library', extra))).toEqual([
+      'Demonic Tutor', 'Divination', 'Goblin Guide', 'Opt',
+    ]);
+    expect(names(search('zone:deck t:instant', extra))).toEqual(['Opt']);
+    // Mill action word counts even without the word "library".
+    const miller = card({ name: 'Mind Sculpt', s: { type_line: 'Sorcery', oracle_text: 'Target opponent mills seven cards.' } });
+    expect(names(search('zone:library', [miller]))).toEqual(['Mind Sculpt']);
+  });
+
   it('malformed queries throw QueryError', () => {
     expect(() => search('t:creature (c:r', FIXTURE)).toThrow(QueryError);
     expect(() => search('o:"unclosed', FIXTURE)).toThrow(QueryError);
