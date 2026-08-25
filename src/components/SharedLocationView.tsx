@@ -125,7 +125,6 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
   // Reservation cart: card row id -> copies wanted.
   const [reserveMode, setReserveMode] = useState(false);
   const [cart, setCart] = useState<Map<number, number>>(new Map());
-  const [buyerName, setBuyerName] = useState('');
   const [reserving, setReserving] = useState(false);
   const [reserveError, setReserveError] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ReserveConflict[] | null>(null);
@@ -141,17 +140,6 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  // Prefill the buyer name from the signed-in account.
-  useEffect(() => {
-    if (user && buyerName === '') {
-      setBuyerName(
-        (user.user_metadata?.full_name as string | undefined)
-          ?? (user.user_metadata?.name as string | undefined)
-          ?? user.email ?? '',
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -207,13 +195,11 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
   async function reserve() {
     setReserveError(null);
     setConflicts(null);
-    if (buyerName.trim() === '') { setReserveError('Enter your name first'); return; }
     if (cartCount === 0) { setReserveError('Click cards to add them first'); return; }
     setReserving(true);
     const { data, error } = await supabase.rpc('reserve_cards', {
       p_share_id: shareId,
       p_items: [...cart.entries()].map(([id, quantity]) => ({ id, quantity })),
-      p_buyer_name: buyerName.trim(),
     });
     setReserving(false);
     if (error) {
@@ -324,16 +310,12 @@ export function SharedLocationView({ shareId }: { shareId: string }) {
                 </ul>
               )}
               <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={buyerName}
-                  onChange={(e) => setBuyerName(e.target.value)}
-                  placeholder="Your name"
-                  className="min-w-0 flex-1 rounded-md bg-zinc-800 px-3 py-2 text-sm ring-1 ring-zinc-700"
-                />
+                <span className="min-w-0 flex-1 truncate text-xs text-zinc-500">
+                  Reserving as {user?.email ?? 'your account'}
+                </span>
                 <button
                   onClick={reserve}
-                  disabled={reserving || cartCount === 0 || buyerName.trim() === ''}
+                  disabled={reserving || cartCount === 0}
                   className="rounded-md bg-emerald-700 px-3 py-2 text-sm font-medium hover:bg-emerald-600 disabled:opacity-40"
                 >
                   {reserving ? 'Reserving…' : `Reserve ${cartCount} cop${cartCount === 1 ? 'y' : 'ies'}`}
