@@ -8,7 +8,7 @@ const ID_CHUNK = 500;
 // Projected columns only — never the full `data` jsonb blob.
 const SCRYFALL_PROJECTION =
   'id,name,oracle_text,type_line,mana_cost,cmc,colors,color_identity,keywords,' +
-  'rarity,set_code,set_name,power,toughness,loyalty,layout,usd,usd_foil,' +
+  'rarity,set_code,set_name,power,toughness,loyalty,layout,full_art,usd,usd_foil,' +
   'image_small,image_normal,scryfall_uri,legalities';
 
 type DbRow = Omit<OwnedCard, 'scryfall' | 'location_name'>;

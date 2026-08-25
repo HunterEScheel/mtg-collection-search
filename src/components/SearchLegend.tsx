@@ -70,6 +70,7 @@ const GROUPS: Group[] = [
       { term: 'is:altered / misprint', desc: 'Flags on your copy' },
       { term: 'is:commander', desc: 'Can be your commander' },
       { term: 'is:dfc', desc: 'Double-faced card' },
+      { term: 'is:fullart', desc: 'Full-art printing (also is:full)' },
       { term: 'is:land / creature', desc: 'Quick type checks' },
       { term: 'is:vanilla / frenchvanilla', desc: 'No abilities / keyword-only abilities' },
       { term: 'not:x', desc: 'Negates any is: value (not:foil)' },

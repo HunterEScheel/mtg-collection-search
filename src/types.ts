@@ -5,6 +5,12 @@ export interface Location {
   name: string;
   /** Public share token; null = not shared. */
   share_id: string | null;
+  /** Shared location is open for reservations. */
+  for_sale: boolean;
+  /** Buyer's user id when this location is a reservation made while signed in. */
+  reserved_by: string | null;
+  /** Source location this reservation was carved out of. */
+  reserved_from: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +55,7 @@ export interface ScryfallCard {
   toughness: string | null;
   loyalty: string | null;
   layout: string | null;
+  full_art: boolean | null;
   usd: number | null;
   usd_foil: number | null;
   image_small: string | null;

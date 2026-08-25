@@ -151,6 +151,7 @@ function Main({ user }: { user: User }) {
         <ManageLocationsDialog
           locations={locations}
           cards={cards}
+          userId={user.id}
           onClose={() => setManaging(false)}
           onChanged={() => reload()}
         />

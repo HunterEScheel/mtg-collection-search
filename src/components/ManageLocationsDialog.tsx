@@ -6,18 +6,21 @@ import { DeleteLocationDialog } from './DeleteLocationDialog';
 interface Props {
   locations: Location[];
   cards: OwnedCard[];
+  /** Current user id — locations reserved FOR this user are visible but not manageable. */
+  userId: string;
   /** Called after any rename/delete so the app can refetch. */
   onChanged: () => void;
   onClose: () => void;
 }
 
-export function ManageLocationsDialog({ locations, cards, onChanged, onClose }: Props) {
+export function ManageLocationsDialog({ locations, cards, userId, onChanged, onClose }: Props) {
   const [deleting, setDeleting] = useState<Location | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [transferConfirmId, setTransferConfirmId] = useState<string | null>(null);
 
   const countFor = (id: string) => cards.filter((c) => c.collection_id === id).length;
 
@@ -29,7 +32,8 @@ export function ManageLocationsDialog({ locations, cards, onChanged, onClose }: 
     setError(null);
     const { error } = await supabase
       .from('collections')
-      .update({ share_id: shareId })
+      // Unsharing also takes the location off sale.
+      .update(shareId ? { share_id: shareId } : { share_id: null, for_sale: false })
       .eq('id', loc.id);
     setBusy(false);
     if (error) {
@@ -55,6 +59,34 @@ export function ManageLocationsDialog({ locations, cards, onChanged, onClose }: 
     } catch {
       setError('Could not copy — copy the link from the address below.');
     }
+  }
+
+  async function setForSale(loc: Location, on: boolean) {
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase
+      .from('collections')
+      .update({ for_sale: on })
+      .eq('id', loc.id);
+    setBusy(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    onChanged();
+  }
+
+  async function transfer(loc: Location) {
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase.rpc('transfer_location', { p_location_id: loc.id });
+    setBusy(false);
+    setTransferConfirmId(null);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    onChanged();
   }
 
   async function saveRename(loc: Location) {
@@ -91,7 +123,9 @@ export function ManageLocationsDialog({ locations, cards, onChanged, onClose }: 
         )}
 
         <ul className="space-y-2">
-          {locations.map((loc) => (
+          {locations.map((loc) => {
+            const owned = loc.user_id === userId;
+            return (
             <li key={loc.id} className="space-y-1 rounded-md bg-zinc-800 px-3 py-2">
               <div className="flex items-center gap-2">
               {renamingId === loc.id ? (
@@ -123,28 +157,66 @@ export function ManageLocationsDialog({ locations, cards, onChanged, onClose }: 
               ) : (
                 <>
                   <span className="min-w-0 flex-1 truncate text-sm">{loc.name}</span>
+                  {loc.reserved_from && (
+                    <span className="rounded-full bg-amber-950/60 px-2 py-0.5 text-[10px] text-amber-400 ring-1 ring-amber-900">
+                      reservation
+                    </span>
+                  )}
+                  {!owned && (
+                    <span className="rounded-full bg-zinc-700 px-2 py-0.5 text-[10px] text-zinc-300">
+                      reserved for you
+                    </span>
+                  )}
                   <span className="text-xs text-zinc-500">{countFor(loc.id)} rows</span>
-                  <button
-                    onClick={() => { setRenamingId(loc.id); setRenameValue(loc.name); }}
-                    className="text-xs text-zinc-400 underline hover:text-zinc-200"
-                  >
-                    rename
-                  </button>
-                  <button
-                    onClick={() => setDeleting(loc)}
-                    className="text-xs text-red-400 underline hover:text-red-300"
-                  >
-                    delete
-                  </button>
+                  {owned && (
+                    <>
+                      {loc.reserved_by && (
+                        <button
+                          onClick={() =>
+                            transferConfirmId === loc.id
+                              ? transfer(loc)
+                              : setTransferConfirmId(loc.id)}
+                          disabled={busy}
+                          className="text-xs text-amber-400 underline hover:text-amber-300"
+                        >
+                          {transferConfirmId === loc.id
+                            ? 'confirm: hand over to buyer?'
+                            : 'transfer to buyer'}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setRenamingId(loc.id); setRenameValue(loc.name); }}
+                        className="text-xs text-zinc-400 underline hover:text-zinc-200"
+                      >
+                        rename
+                      </button>
+                      <button
+                        onClick={() => setDeleting(loc)}
+                        className="text-xs text-red-400 underline hover:text-red-300"
+                      >
+                        delete
+                      </button>
+                    </>
+                  )}
                 </>
               )}
               </div>
+              {owned && (
               <div className="flex items-center gap-2">
                 {loc.share_id ? (
                   <>
                     <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-zinc-500">
                       {shareUrl(loc.share_id)}
                     </span>
+                    <label className="flex items-center gap-1 text-xs text-zinc-400">
+                      <input
+                        type="checkbox"
+                        checked={loc.for_sale}
+                        disabled={busy}
+                        onChange={(e) => setForSale(loc, e.target.checked)}
+                      />
+                      for sale
+                    </label>
                     <button
                       onClick={() => copyLink(loc)}
                       className="text-xs text-indigo-400 underline hover:text-indigo-300"
@@ -169,8 +241,10 @@ export function ManageLocationsDialog({ locations, cards, onChanged, onClose }: 
                   </button>
                 )}
               </div>
+              )}
             </li>
-          ))}
+            );
+          })}
         </ul>
 
         {error && <p className="text-sm text-red-400">{error}</p>}

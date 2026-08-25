@@ -44,6 +44,7 @@ function card(name: string, oracle_text: string | null): OwnedCard {
       toughness: null,
       loyalty: null,
       layout: 'normal',
+      full_art: null,
       usd: null,
       usd_foil: null,
       image_small: null,

@@ -22,6 +22,7 @@ interface ScryfallApiCard {
   toughness?: string;
   loyalty?: string;
   layout?: string;
+  full_art?: boolean;
   prices?: { usd?: string | null; usd_foil?: string | null };
   image_uris?: { small?: string; normal?: string };
   scryfall_uri?: string;
@@ -68,6 +69,7 @@ export function flattenCard(card: ScryfallApiCard) {
     toughness: card.toughness ?? face0?.toughness ?? null,
     loyalty: card.loyalty ?? face0?.loyalty ?? null,
     layout: card.layout ?? null,
+    full_art: card.full_art ?? null,
     usd: card.prices?.usd ? Number(card.prices.usd) : null,
     usd_foil: card.prices?.usd_foil ? Number(card.prices.usd_foil) : null,
     image_small: images?.small ?? null,

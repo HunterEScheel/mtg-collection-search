@@ -45,6 +45,7 @@ function card(over: Partial<OwnedCard> & { name: string; s?: Partial<ScryfallCar
       toughness: null,
       loyalty: null,
       layout: 'normal',
+      full_art: null,
       usd: null,
       usd_foil: null,
       image_small: null,
@@ -142,6 +143,15 @@ describe('search', () => {
     expect(names(search('is:dfc', FIXTURE))).toEqual(['Clearwater Pathway // Murkwater Pathway']);
     expect(names(search('is:commander', FIXTURE))).toEqual(['Aurelia, Exemplar of Justice']);
     expect(names(search('not:foil t:instant', FIXTURE))).toEqual(['Lightning Bolt']);
+  });
+
+  it('is:fullart', () => {
+    const extra = [
+      ...FIXTURE,
+      card({ name: 'Fullart Forest', s: { type_line: 'Basic Land — Forest', full_art: true } }),
+    ];
+    expect(names(search('is:fullart', extra))).toEqual(['Fullart Forest']);
+    expect(names(search('is:full', extra))).toEqual(['Fullart Forest']);
   });
 
   it('is:vanilla / frenchvanilla', () => {

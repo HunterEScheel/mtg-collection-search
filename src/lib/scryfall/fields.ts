@@ -160,6 +160,8 @@ const IS_PREDICATES: Record<string, Predicate> = {
   altered: (c) => c.altered,
   misprint: (c) => c.misprint,
   dfc: (c) => ['transform', 'modal_dfc', 'double_faced_token'].includes(c.scryfall?.layout ?? ''),
+  fullart: (c) => c.scryfall?.full_art === true,
+  full: (c) => c.scryfall?.full_art === true,
   land: (c) => (c.scryfall?.type_line ?? '').toLowerCase().includes('land'),
   creature: (c) => (c.scryfall?.type_line ?? '').toLowerCase().includes('creature'),
   commander: (c) => {
