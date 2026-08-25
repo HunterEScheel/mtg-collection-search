@@ -17,6 +17,7 @@ import { CardDetail } from './components/CardDetail';
 import { CardContextMenu, type CardMenuState } from './components/CardContextMenu';
 import { computeWrites, executeMove } from './lib/move/executeMove';
 import { searchScryfallRemote, type RemoteSearchResult } from './lib/scryfall/remoteSearch';
+import { toMoxfieldList } from './lib/moxfieldExport';
 import { SearchLegend } from './components/SearchLegend';
 import { TokenTypesPanel } from './components/TokenTypesPanel';
 import type { OwnedCard } from './types';
@@ -34,6 +35,10 @@ function Main({ user }: { user: User }) {
   const [menuBusy, setMenuBusy] = useState(false);
   const [menuError, setMenuError] = useState<string | null>(null);
   const [onlyMine, setOnlyMine] = useState(true);
+  // Deckbuilder: a temporary pick list (display row id -> copies). Cleared on exit.
+  const [deckMode, setDeckMode] = useState(false);
+  const [deck, setDeck] = useState<Map<number, number>>(new Map());
+  const [deckCopied, setDeckCopied] = useState(false);
   const [remote, setRemote] = useState<RemoteSearchResult | null>(null);
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [remoteError, setRemoteError] = useState<string | null>(null);
@@ -56,12 +61,12 @@ function Main({ user }: { user: User }) {
   // Scryfall-wide search when "My collection only" is unchecked.
   useEffect(() => {
     if (onlyMine) return;
-    if (query.trim() === '') {
-      setRemote(null);
-      setRemoteError(null);
-      return;
-    }
     const t = setTimeout(() => {
+      if (query.trim() === '') {
+        setRemote(null);
+        setRemoteError(null);
+        return;
+      }
       setRemoteLoading(true);
       setRemoteError(null);
       searchScryfallRemote(query, ownedByName)
@@ -87,6 +92,26 @@ function Main({ user }: { user: User }) {
     () => (detail ? cards.filter((c) => c.scryfall_id === detail.scryfall_id) : []),
     [detail, cards],
   );
+
+  const displayById = useMemo(
+    () => new Map(displayResults.map((c) => [c.id, c])),
+    [displayResults],
+  );
+  const deckCount = [...deck.values()].reduce((n, q) => n + q, 0);
+
+  function setDeckQty(id: number, qty: number) {
+    const max = displayById.get(id)?.quantity ?? cards.find((c) => c.id === id)?.quantity ?? 0;
+    const next = new Map(deck);
+    const clamped = Math.min(Math.max(qty, 0), max);
+    if (clamped === 0) next.delete(id);
+    else next.set(id, clamped);
+    setDeck(next);
+  }
+
+  function onCardClick(c: OwnedCard) {
+    if (deckMode) setDeckQty(c.id, (deck.get(c.id) ?? 0) + 1);
+    else setDetail(c);
+  }
 
   /**
    * Move a displayed card entry to another location. Display rows are grouped
@@ -140,6 +165,23 @@ function Main({ user }: { user: User }) {
             Manage Locations
           </button>
         )}
+        {locations.length > 0 && (
+          <button
+            onClick={() => {
+              // Leaving deckbuilder discards the temporary list.
+              setDeckMode((v) => !v);
+              setDeck(new Map());
+              setDeckCopied(false);
+            }}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ring-1 ${
+              deckMode
+                ? 'bg-emerald-700 ring-emerald-600'
+                : 'bg-zinc-800 ring-zinc-700 hover:bg-zinc-700'
+            }`}
+          >
+            {deckMode ? 'Exit Deckbuilder' : 'Deckbuilder'}
+          </button>
+        )}
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-zinc-500">{user.email}</span>
           <button
@@ -189,6 +231,84 @@ function Main({ user }: { user: User }) {
         <FilterBar filters={filters} onChange={setFilters} locationNames={locationNames} />
       )}
 
+      {deckMode && (
+        <div className="space-y-2 rounded-md bg-zinc-900 p-3 ring-1 ring-emerald-900/60">
+          {deckCount === 0 ? (
+            <p className="text-sm text-zinc-400">
+              Deckbuilder: click cards to add them to a temporary list. It disappears when you
+              exit.
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {[...deck.entries()].map(([id, qty]) => {
+                const c = displayById.get(id) ?? cards.find((r) => r.id === id);
+                if (!c) return null;
+                return (
+                  <li key={id} className="flex items-center gap-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate">
+                      {c.scryfall?.name ?? c.card_name}
+                      <span className="text-zinc-500"> ({c.set_code?.toUpperCase()})</span>
+                    </span>
+                    <button
+                      onClick={() => setDeckQty(id, qty - 1)}
+                      className="rounded bg-zinc-800 px-2 ring-1 ring-zinc-700 hover:bg-zinc-700"
+                    >
+                      −
+                    </button>
+                    <span className="w-10 text-center text-xs text-zinc-300">
+                      {qty}/{c.quantity}
+                    </span>
+                    <button
+                      onClick={() => setDeckQty(id, qty + 1)}
+                      className="rounded bg-zinc-800 px-2 ring-1 ring-zinc-700 hover:bg-zinc-700"
+                    >
+                      +
+                    </button>
+                    <button
+                      onClick={() => setDeckQty(id, 0)}
+                      className="text-xs text-red-400 underline hover:text-red-300"
+                    >
+                      remove
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {deckCount > 0 && (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-zinc-500">
+                {deckCount} cop{deckCount === 1 ? 'y' : 'ies'}
+              </span>
+              <button
+                onClick={async () => {
+                  const rows = [...deck.entries()]
+                    .map(([id, qty]) => {
+                      const c = displayById.get(id) ?? cards.find((r) => r.id === id);
+                      return c ? { ...c, quantity: qty } : null;
+                    })
+                    .filter((r): r is OwnedCard => r !== null);
+                  try {
+                    await navigator.clipboard.writeText(toMoxfieldList(rows));
+                    setDeckCopied(true);
+                    setTimeout(() => setDeckCopied(false), 2000);
+                  } catch { /* clipboard unavailable */ }
+                }}
+                className="text-xs text-indigo-400 underline hover:text-indigo-300"
+              >
+                {deckCopied ? 'copied!' : 'copy for Moxfield'}
+              </button>
+              <button
+                onClick={() => setDeck(new Map())}
+                className="text-xs text-zinc-400 underline hover:text-zinc-200"
+              >
+                clear
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {loadError && <p className="text-sm text-red-400">{loadError}</p>}
       {loading ? (
         <p className="text-sm text-zinc-400">Loading collection…</p>
@@ -224,14 +344,16 @@ function Main({ user }: { user: User }) {
           {view === 'grid' ? (
             <ResultsGrid
               cards={displayResults}
-              onSelect={setDetail}
+              onSelect={onCardClick}
               onContext={(card, e) => setCardMenu({ card, x: e.clientX, y: e.clientY })}
+              selected={deckMode ? deck : undefined}
             />
           ) : (
             <ResultsTable
               cards={displayResults}
-              onSelect={setDetail}
+              onSelect={onCardClick}
               onContext={(card, e) => setCardMenu({ card, x: e.clientX, y: e.clientY })}
+              selected={deckMode ? deck : undefined}
             />
           )}
         </>
