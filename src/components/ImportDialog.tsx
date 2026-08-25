@@ -114,7 +114,7 @@ export function ImportDialog({ locations, onDone, onClose }: Props) {
                   checked={quantityMode === 'add'}
                   onChange={() => setQuantityMode('add')}
                 />
-                Add to quantities
+                Add to collection
               </label>
               <label className="flex items-center gap-1.5">
                 <input
@@ -122,13 +122,13 @@ export function ImportDialog({ locations, onDone, onClose }: Props) {
                   checked={quantityMode === 'replace'}
                   onChange={() => setQuantityMode('replace')}
                 />
-                Replace quantities
+                Replace collection
               </label>
             </div>
             <p className="text-xs text-zinc-500">
               {quantityMode === 'add'
-                ? 'Imported quantities are added on top of what the location already holds.'
-                : 'Matching cards are set to the imported quantities (a re-sync); cards not in the import are left alone.'}
+                ? 'The import is added on top of what the location already holds.'
+                : 'The location is emptied first, so it ends up containing exactly what the import contains.'}
             </p>
           </div>
         )}
