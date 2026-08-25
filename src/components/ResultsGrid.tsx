@@ -3,11 +3,13 @@ import type { OwnedCard } from '../types';
 interface Props {
   cards: OwnedCard[];
   onSelect: (card: OwnedCard) => void;
+  /** Right-click handler (context menu). */
+  onContext?: (card: OwnedCard, e: React.MouseEvent) => void;
   /** Card row id -> copies selected (e.g. for reservation); highlights the tile. */
   selected?: Map<number, number>;
 }
 
-export function ResultsGrid({ cards, onSelect, selected }: Props) {
+export function ResultsGrid({ cards, onSelect, onContext, selected }: Props) {
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
       {cards.map((c) => {
@@ -16,6 +18,7 @@ export function ResultsGrid({ cards, onSelect, selected }: Props) {
         <button
           key={c.id}
           onClick={() => onSelect(c)}
+          onContextMenu={(e) => { if (onContext) { e.preventDefault(); onContext(c, e); } }}
           className={`group relative rounded-lg text-left ${
             picked > 0 ? 'ring-2 ring-emerald-500' : ''
           }`}

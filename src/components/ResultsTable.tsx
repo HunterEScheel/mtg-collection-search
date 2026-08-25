@@ -7,6 +7,8 @@ type SortKey = 'name' | 'set' | 'foil' | 'condition' | 'qty' | 'location' | 'pri
 interface Props {
   cards: OwnedCard[];
   onSelect: (card: OwnedCard) => void;
+  /** Right-click handler (context menu). */
+  onContext?: (card: OwnedCard, e: React.MouseEvent) => void;
   /** Card row id -> copies selected (e.g. for reservation); highlights the row. */
   selected?: Map<number, number>;
 }
@@ -21,7 +23,7 @@ const getters: Record<SortKey, (c: OwnedCard) => string | number> = {
   price: (c) => ownedPrice(c) ?? -1,
 };
 
-export function ResultsTable({ cards, onSelect, selected }: Props) {
+export function ResultsTable({ cards, onSelect, onContext, selected }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [asc, setAsc] = useState(true);
 
@@ -70,6 +72,7 @@ export function ResultsTable({ cards, onSelect, selected }: Props) {
               <tr
                 key={c.id}
                 onClick={() => onSelect(c)}
+                onContextMenu={(e) => { if (onContext) { e.preventDefault(); onContext(c, e); } }}
                 className={`cursor-pointer border-t border-zinc-800 ${
                   picked > 0 ? 'bg-emerald-950/40 hover:bg-emerald-950/60' : 'hover:bg-zinc-900'
                 }`}

@@ -14,6 +14,8 @@ import { ImportDialog } from './components/ImportDialog';
 import { MoveDialog } from './components/MoveDialog';
 import { ManageLocationsDialog } from './components/ManageLocationsDialog';
 import { CardDetail } from './components/CardDetail';
+import { CardContextMenu, type CardMenuState } from './components/CardContextMenu';
+import { computeWrites, executeMove } from './lib/move/executeMove';
 import { SearchLegend } from './components/SearchLegend';
 import { TokenTypesPanel } from './components/TokenTypesPanel';
 import type { OwnedCard } from './types';
@@ -27,6 +29,9 @@ function Main({ user }: { user: User }) {
   const [managing, setManaging] = useState(false);
   const [detail, setDetail] = useState<OwnedCard | null>(null);
   const [showLegend, setShowLegend] = useState(false);
+  const [cardMenu, setCardMenu] = useState<CardMenuState | null>(null);
+  const [menuBusy, setMenuBusy] = useState(false);
+  const [menuError, setMenuError] = useState<string | null>(null);
 
   const { cards, locations, loading, error: loadError, reload } = useAllCards();
   const { results, error: queryError } = useSearch(cards, query, filters);
@@ -49,6 +54,32 @@ function Main({ user }: { user: User }) {
     () => (detail ? cards.filter((c) => c.scryfall_id === detail.scryfall_id) : []),
     [detail, cards],
   );
+
+  /**
+   * Move a displayed card entry to another location. Display rows are grouped
+   * (foil/condition combined), so move every underlying variant row in the
+   * same location/printing/language/binder group.
+   */
+  async function moveCard(card: OwnedCard, destId: string) {
+    setMenuBusy(true);
+    setMenuError(null);
+    try {
+      const rows = cards.filter((r) =>
+        r.collection_id === card.collection_id
+        && r.scryfall_id === card.scryfall_id
+        && r.language === card.language
+        && r.binder_name === card.binder_name);
+      const transfers = rows.map((r) => ({ sourceRow: r, qty: r.quantity }));
+      const destCards = cards.filter((r) => r.collection_id === destId);
+      await executeMove(computeWrites(transfers, destCards, destId));
+      setCardMenu(null);
+      reload();
+    } catch (e) {
+      setMenuError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setMenuBusy(false);
+    }
+  }
 
   return (
     <div className="mx-auto max-w-7xl space-y-4 p-4">
@@ -127,9 +158,17 @@ function Main({ user }: { user: User }) {
           </p>
           <TokenTypesPanel cards={results} onSearch={setQuery} />
           {view === 'grid' ? (
-            <ResultsGrid cards={displayResults} onSelect={setDetail} />
+            <ResultsGrid
+              cards={displayResults}
+              onSelect={setDetail}
+              onContext={(card, e) => setCardMenu({ card, x: e.clientX, y: e.clientY })}
+            />
           ) : (
-            <ResultsTable cards={displayResults} onSelect={setDetail} />
+            <ResultsTable
+              cards={displayResults}
+              onSelect={setDetail}
+              onContext={(card, e) => setCardMenu({ card, x: e.clientX, y: e.clientY })}
+            />
           )}
         </>
       )}
@@ -162,12 +201,18 @@ function Main({ user }: { user: User }) {
       )}
 
       {detail && (
-        <CardDetail
-          card={detail}
-          copies={detailCopies}
+        <CardDetail card={detail} copies={detailCopies} onClose={() => setDetail(null)} />
+      )}
+
+      {menuError && <p className="text-sm text-red-400">{menuError}</p>}
+      {cardMenu && (
+        <CardContextMenu
+          menu={cardMenu}
           locations={locations.filter((l) => l.user_id === user.id)}
-          onMoved={() => { setDetail(null); reload(); }}
-          onClose={() => setDetail(null)}
+          busy={menuBusy}
+          onViewDetails={setDetail}
+          onMove={moveCard}
+          onClose={() => setCardMenu(null)}
         />
       )}
 
