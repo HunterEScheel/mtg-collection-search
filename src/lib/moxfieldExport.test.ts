@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { toMoxfieldList } from './moxfieldExport';
+import { toManaBoxCsv, toMoxfieldList } from './moxfieldExport';
+import { parseCollectionCsv } from './manabox/parse';
 import type { OwnedCard } from '../types';
 
 let nextId = 1;
@@ -47,6 +48,43 @@ describe('toMoxfieldList', () => {
       row({ quantity: 3, condition: 'lightly_played', language: 'ja' }),
     ]);
     expect(out).toBe('5 Lightning Bolt (2XM) 123');
+  });
+
+  it('ManaBox CSV export round-trips through our own ManaBox parser', () => {
+    const original = [
+      row({
+        quantity: 2,
+        scryfall_id: 'bb206e27-da4d-4abe-9d8c-6d18c5f2f52a',
+        binder_name: 'Trades, "A"',
+        purchase_price: 1.5,
+        misprint: true,
+      }),
+      row({
+        quantity: 1,
+        scryfall_id: 'b4b99ebb-0d54-4fe5-a495-979aaa564aa8',
+        card_name: 'Sol Ring',
+        foil: 'foil',
+        condition: 'lightly_played',
+      }),
+    ];
+    const { format, rows: parsed, malformed } = parseCollectionCsv(toManaBoxCsv(original));
+    expect(format).toBe('ManaBox');
+    expect(malformed).toEqual([]);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]).toMatchObject({
+      card_name: 'Lightning Bolt',
+      scryfall_id: 'bb206e27-da4d-4abe-9d8c-6d18c5f2f52a',
+      quantity: 2,
+      binder_name: 'Trades, "A"',
+      purchase_price: 1.5,
+      misprint: true,
+    });
+    expect(parsed[1]).toMatchObject({
+      card_name: 'Sol Ring',
+      foil: 'foil',
+      condition: 'lightly_played',
+      language: 'en',
+    });
   });
 
   it('keeps foil lines separate and handles missing set/collector', () => {

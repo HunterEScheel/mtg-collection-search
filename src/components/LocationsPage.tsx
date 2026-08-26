@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { ownedPrice } from '../lib/scryfall';
 import type { Location, OwnedCard } from '../types';
 import { computeWrites, executeMove } from '../lib/move/executeMove';
-import { toMoxfieldList } from '../lib/moxfieldExport';
+import { toManaBoxCsv, toMoxfieldList } from '../lib/moxfieldExport';
 import { DeleteLocationDialog } from './DeleteLocationDialog';
 
 interface Props {
@@ -86,6 +86,18 @@ export function LocationsPage({ locations, cards, userId, onChanged, onBack }: P
     } catch {
       setError('Could not copy to clipboard.');
     }
+  }
+
+  /** Download the location as a ManaBox-importable CSV file. */
+  function exportManaBox(loc: Location) {
+    const rows = cards.filter((c) => c.collection_id === loc.id);
+    const blob = new Blob([toManaBoxCsv(rows)], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${loc.name.replace(/[^\w\- ]+/g, '')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function setForSale(loc: Location, on: boolean) {
@@ -234,11 +246,18 @@ export function LocationsPage({ locations, cards, userId, onChanged, onBack }: P
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
+                <span className="text-xs text-zinc-500">export:</span>
                 <button
                   onClick={() => exportMoxfield(loc)}
                   className={`${actionClass} text-indigo-400 hover:text-indigo-300`}
                 >
-                  {exportedId === loc.id ? 'copied!' : 'copy for Moxfield'}
+                  {exportedId === loc.id ? 'copied!' : 'Moxfield'}
+                </button>
+                <button
+                  onClick={() => exportManaBox(loc)}
+                  className={`${actionClass} text-indigo-400 hover:text-indigo-300`}
+                >
+                  ManaBox
                 </button>
                 {owned && (
                   <>
