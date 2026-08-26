@@ -12,7 +12,7 @@ import { ResultsGrid } from './components/ResultsGrid';
 import { ResultsTable } from './components/ResultsTable';
 import { ImportDialog } from './components/ImportDialog';
 import { MoveDialog } from './components/MoveDialog';
-import { ManageLocationsDialog } from './components/ManageLocationsDialog';
+import { LocationsPage } from './components/LocationsPage';
 import { CardDetail } from './components/CardDetail';
 import { CardContextMenu, type CardMenuState } from './components/CardContextMenu';
 import { computeWrites, executeMove } from './lib/move/executeMove';
@@ -28,7 +28,7 @@ function Main({ user }: { user: User }) {
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [importing, setImporting] = useState(false);
   const [moving, setMoving] = useState(false);
-  const [managing, setManaging] = useState(false);
+  const [page, setPage] = useState<'cards' | 'locations'>('cards');
   const [detail, setDetail] = useState<OwnedCard | null>(null);
   const [showLegend, setShowLegend] = useState(false);
   const [cardMenu, setCardMenu] = useState<CardMenuState | null>(null);
@@ -159,10 +159,14 @@ function Main({ user }: { user: User }) {
         )}
         {locations.length > 0 && (
           <button
-            onClick={() => setManaging(true)}
-            className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm font-medium ring-1 ring-zinc-700 hover:bg-zinc-700"
+            onClick={() => setPage(page === 'locations' ? 'cards' : 'locations')}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ring-1 ${
+              page === 'locations'
+                ? 'bg-indigo-600 ring-indigo-500'
+                : 'bg-zinc-800 ring-zinc-700 hover:bg-zinc-700'
+            }`}
           >
-            Manage Locations
+            Locations
           </button>
         )}
         {locations.length > 0 && (
@@ -193,6 +197,16 @@ function Main({ user }: { user: User }) {
         </div>
       </header>
 
+      {page === 'locations' ? (
+        <LocationsPage
+          locations={locations}
+          cards={cards}
+          userId={user.id}
+          onChanged={() => reload()}
+          onBack={() => setPage('cards')}
+        />
+      ) : (
+      <>
       <div className="flex items-start gap-3">
         <SearchBar query={query} onChange={setQuery} error={onlyMine ? queryError : remoteError} />
         <label className="flex items-center gap-1.5 whitespace-nowrap py-2 text-sm text-zinc-300">
@@ -358,6 +372,8 @@ function Main({ user }: { user: User }) {
           )}
         </>
       )}
+      </>
+      )}
 
       {importing && (
         <ImportDialog
@@ -373,16 +389,6 @@ function Main({ user }: { user: User }) {
           cards={cards}
           onClose={() => setMoving(false)}
           onDone={() => reload()}
-        />
-      )}
-
-      {managing && (
-        <ManageLocationsDialog
-          locations={locations}
-          cards={cards}
-          userId={user.id}
-          onClose={() => setManaging(false)}
-          onChanged={() => reload()}
         />
       )}
 

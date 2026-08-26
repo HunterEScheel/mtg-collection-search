@@ -1,0 +1,370 @@
+import { useMemo, useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { ownedPrice } from '../lib/scryfall';
+import type { Location, OwnedCard } from '../types';
+import { computeWrites, executeMove } from '../lib/move/executeMove';
+import { toMoxfieldList } from '../lib/moxfieldExport';
+import { DeleteLocationDialog } from './DeleteLocationDialog';
+
+interface Props {
+  locations: Location[];
+  cards: OwnedCard[];
+  /** Current user id — locations reserved FOR this user are visible but not manageable. */
+  userId: string;
+  /** Called after any change so the app can refetch. */
+  onChanged: () => void;
+  onBack: () => void;
+}
+
+export function LocationsPage({ locations, cards, userId, onChanged, onBack }: Props) {
+  const [deleting, setDeleting] = useState<Location | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [exportedId, setExportedId] = useState<string | null>(null);
+  const [transferConfirmId, setTransferConfirmId] = useState<string | null>(null);
+  const [mergingId, setMergingId] = useState<string | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState('');
+
+  const statsFor = useMemo(() => {
+    const map = new Map<string, { rows: number; copies: number; value: number }>();
+    for (const c of cards) {
+      const s = map.get(c.collection_id) ?? { rows: 0, copies: 0, value: 0 };
+      s.rows += 1;
+      s.copies += c.quantity;
+      s.value += (ownedPrice(c) ?? 0) * c.quantity;
+      map.set(c.collection_id, s);
+    }
+    return (id: string) => map.get(id) ?? { rows: 0, copies: 0, value: 0 };
+  }, [cards]);
+
+  const shareUrl = (shareId: string) =>
+    `${window.location.origin}${window.location.pathname}?share=${shareId}`;
+
+  async function setShare(loc: Location, shareId: string | null) {
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase
+      .from('collections')
+      // Unsharing also takes the location off sale.
+      .update(shareId ? { share_id: shareId } : { share_id: null, for_sale: false })
+      .eq('id', loc.id);
+    setBusy(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    if (shareId) {
+      try {
+        await navigator.clipboard.writeText(shareUrl(shareId));
+        setCopiedId(loc.id);
+      } catch {
+        // Clipboard can fail (permissions); the link stays visible to copy manually.
+      }
+    }
+    onChanged();
+  }
+
+  async function copyLink(loc: Location) {
+    if (!loc.share_id) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl(loc.share_id));
+      setCopiedId(loc.id);
+    } catch {
+      setError('Could not copy — copy the link shown on the row instead.');
+    }
+  }
+
+  async function exportMoxfield(loc: Location) {
+    const rows = cards.filter((c) => c.collection_id === loc.id);
+    try {
+      await navigator.clipboard.writeText(toMoxfieldList(rows));
+      setExportedId(loc.id);
+      setTimeout(() => setExportedId(null), 2000);
+    } catch {
+      setError('Could not copy to clipboard.');
+    }
+  }
+
+  async function setForSale(loc: Location, on: boolean) {
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase
+      .from('collections')
+      .update({ for_sale: on })
+      .eq('id', loc.id);
+    setBusy(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    onChanged();
+  }
+
+  async function transfer(loc: Location) {
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase.rpc('transfer_location', { p_location_id: loc.id });
+    setBusy(false);
+    setTransferConfirmId(null);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    onChanged();
+  }
+
+  /** Move every card from `loc` into the target (natural-key merge), then delete `loc`. */
+  async function merge(loc: Location, targetId: string) {
+    if (!targetId || targetId === loc.id) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const sourceRows = cards.filter((c) => c.collection_id === loc.id);
+      const destCards = cards.filter((c) => c.collection_id === targetId);
+      const transfers = sourceRows.map((r) => ({ sourceRow: r, qty: r.quantity }));
+      await executeMove(computeWrites(transfers, destCards, targetId));
+      const { error } = await supabase.from('collections').delete().eq('id', loc.id);
+      if (error) throw new Error(error.message);
+      setMergingId(null);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveRename(loc: Location) {
+    const name = renameValue.trim();
+    if (!name || name === loc.name) {
+      setRenamingId(null);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase.from('collections').update({ name }).eq('id', loc.id);
+    setBusy(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setRenamingId(null);
+    onChanged();
+  }
+
+  const actionClass = 'text-xs underline';
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onBack}
+          className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm font-medium ring-1 ring-zinc-700 hover:bg-zinc-700"
+        >
+          ← Back to cards
+        </button>
+        <h2 className="text-lg font-semibold">Locations</h2>
+      </div>
+
+      {locations.length === 0 && (
+        <p className="text-sm text-zinc-400">No locations yet — import a collection to create one.</p>
+      )}
+
+      {error && <p className="text-sm text-red-400">{error}</p>}
+
+      <ul className="space-y-3">
+        {locations.map((loc) => {
+          const owned = loc.user_id === userId;
+          const stats = statsFor(loc.id);
+          return (
+            <li key={loc.id} className="space-y-2 rounded-xl bg-zinc-900 p-4 ring-1 ring-zinc-800">
+              <div className="flex flex-wrap items-center gap-2">
+                {renamingId === loc.id ? (
+                  <>
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveRename(loc);
+                        if (e.key === 'Escape') setRenamingId(null);
+                      }}
+                      className="min-w-0 flex-1 rounded bg-zinc-800 px-2 py-1 text-sm ring-1 ring-zinc-600"
+                    />
+                    <button
+                      onClick={() => saveRename(loc)}
+                      disabled={busy}
+                      className={`${actionClass} text-indigo-400 hover:text-indigo-300`}
+                    >
+                      save
+                    </button>
+                    <button
+                      onClick={() => setRenamingId(null)}
+                      className={`${actionClass} text-zinc-400 hover:text-zinc-200`}
+                    >
+                      cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="min-w-0 truncate text-base font-medium">{loc.name}</span>
+                    {loc.reserved_from && (
+                      <span className="rounded-full bg-amber-950/60 px-2 py-0.5 text-[10px] text-amber-400 ring-1 ring-amber-900">
+                        reservation
+                      </span>
+                    )}
+                    {loc.for_sale && (
+                      <span className="rounded-full bg-emerald-950/60 px-2 py-0.5 text-[10px] text-emerald-400 ring-1 ring-emerald-900">
+                        for sale
+                      </span>
+                    )}
+                    {!owned && (
+                      <span className="rounded-full bg-zinc-700 px-2 py-0.5 text-[10px] text-zinc-300">
+                        reserved for you
+                      </span>
+                    )}
+                    <span className="ml-auto text-xs text-zinc-500">
+                      {stats.rows} rows / {stats.copies} copies / ${stats.value.toFixed(2)}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => exportMoxfield(loc)}
+                  className={`${actionClass} text-indigo-400 hover:text-indigo-300`}
+                >
+                  {exportedId === loc.id ? 'copied!' : 'copy for Moxfield'}
+                </button>
+                {owned && (
+                  <>
+                    {loc.reserved_by && (
+                      <button
+                        onClick={() =>
+                          transferConfirmId === loc.id ? transfer(loc) : setTransferConfirmId(loc.id)}
+                        disabled={busy}
+                        className={`${actionClass} text-amber-400 hover:text-amber-300`}
+                      >
+                        {transferConfirmId === loc.id
+                          ? 'confirm: hand over to buyer?'
+                          : 'transfer to buyer'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setRenamingId(loc.id); setRenameValue(loc.name); }}
+                      className={`${actionClass} text-zinc-400 hover:text-zinc-200`}
+                    >
+                      rename
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMergingId(mergingId === loc.id ? null : loc.id);
+                        setMergeTargetId('');
+                      }}
+                      className={`${actionClass} text-zinc-400 hover:text-zinc-200`}
+                    >
+                      merge into…
+                    </button>
+                    <button
+                      onClick={() => setDeleting(loc)}
+                      className={`${actionClass} text-red-400 hover:text-red-300`}
+                    >
+                      delete
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {mergingId === loc.id && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-zinc-400">Merge all cards into:</span>
+                  <select
+                    value={mergeTargetId}
+                    onChange={(e) => setMergeTargetId(e.target.value)}
+                    className="min-w-0 flex-1 rounded bg-zinc-800 px-2 py-1 text-xs ring-1 ring-zinc-600"
+                  >
+                    <option value="">— pick a location —</option>
+                    {locations
+                      .filter((l) => l.id !== loc.id && l.user_id === userId)
+                      .map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                  <button
+                    onClick={() => merge(loc, mergeTargetId)}
+                    disabled={busy || !mergeTargetId}
+                    className={`${actionClass} text-amber-400 hover:text-amber-300 disabled:opacity-40`}
+                  >
+                    {busy ? 'merging…' : `merge & delete “${loc.name}”`}
+                  </button>
+                  <button
+                    onClick={() => setMergingId(null)}
+                    className={`${actionClass} text-zinc-400 hover:text-zinc-200`}
+                  >
+                    cancel
+                  </button>
+                </div>
+              )}
+
+              {owned && (
+                <div className="flex flex-wrap items-center gap-3">
+                  {loc.share_id ? (
+                    <>
+                      <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-zinc-500">
+                        {shareUrl(loc.share_id)}
+                      </span>
+                      <label className="flex items-center gap-1 text-xs text-zinc-400">
+                        <input
+                          type="checkbox"
+                          checked={loc.for_sale}
+                          disabled={busy}
+                          onChange={(e) => setForSale(loc, e.target.checked)}
+                        />
+                        for sale
+                      </label>
+                      <button
+                        onClick={() => copyLink(loc)}
+                        className={`${actionClass} text-indigo-400 hover:text-indigo-300`}
+                      >
+                        {copiedId === loc.id ? 'copied!' : 'copy link'}
+                      </button>
+                      <button
+                        onClick={() => setShare(loc, null)}
+                        disabled={busy}
+                        className={`${actionClass} text-zinc-400 hover:text-zinc-200`}
+                      >
+                        unshare
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setShare(loc, crypto.randomUUID())}
+                      disabled={busy}
+                      className={`${actionClass} text-zinc-400 hover:text-zinc-200`}
+                    >
+                      share
+                    </button>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {deleting && (
+        <DeleteLocationDialog
+          location={deleting}
+          cardCount={statsFor(deleting.id).rows}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            setDeleting(null);
+            onChanged();
+          }}
+        />
+      )}
+    </div>
+  );
+}
