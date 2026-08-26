@@ -118,7 +118,15 @@ function Main({ user }: { user: User }) {
    * (foil/condition combined), so move every underlying variant row in the
    * same location/printing/language/binder group.
    */
+  /** True when the card sits in a location reserved FOR this user (seller still owns it). */
+  const isPendingSale = (card: OwnedCard) =>
+    locations.some((l) => l.id === card.collection_id && l.user_id !== user.id);
+
   async function moveCard(card: OwnedCard, destId: string) {
+    if (isPendingSale(card)) {
+      setMenuError('This card is reserved for you but the sale has not been confirmed yet — it cannot be moved until the seller transfers it.');
+      return;
+    }
     setMenuBusy(true);
     setMenuError(null);
     try {
@@ -401,6 +409,9 @@ function Main({ user }: { user: User }) {
         <CardContextMenu
           menu={cardMenu}
           locations={locations.filter((l) => l.user_id === user.id)}
+          moveDisabledReason={isPendingSale(cardMenu.card)
+            ? 'Sale not confirmed yet — the seller must transfer this reservation before you can move its cards.'
+            : undefined}
           busy={menuBusy}
           onViewDetails={setDetail}
           onMove={moveCard}

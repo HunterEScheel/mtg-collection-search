@@ -149,19 +149,30 @@ export async function executeMove(writes: MoveWrites): Promise<void> {
     if (error) throw new Error(`Moving cards failed: ${error.message}`);
   }
 
+  // Source writes verify the affected row count: RLS silently filters rows
+  // the caller cannot modify (0 rows updated, no error), which would turn a
+  // move into a copy. Surface that as a hard failure instead.
   for (const u of writes.sourceUpdates) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('collection_cards')
       .update({ quantity: u.quantity })
-      .eq('id', u.id);
+      .eq('id', u.id)
+      .select('id');
     if (error) throw new Error(`Moving cards failed: ${error.message}`);
+    if ((data ?? []).length !== 1) {
+      throw new Error('Move failed: you do not have permission to move these cards.');
+    }
   }
 
   if (writes.sourceDeletes.length > 0) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('collection_cards')
       .delete()
-      .in('id', writes.sourceDeletes);
+      .in('id', writes.sourceDeletes)
+      .select('id');
     if (error) throw new Error(`Moving cards failed: ${error.message}`);
+    if ((data ?? []).length !== writes.sourceDeletes.length) {
+      throw new Error('Move failed: you do not have permission to move these cards.');
+    }
   }
 }

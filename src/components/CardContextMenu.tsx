@@ -11,6 +11,8 @@ interface Props {
   menu: CardMenuState;
   /** Locations the card can be moved to (current one is filtered out here). */
   locations: Location[];
+  /** When set, moving is blocked and this message is shown instead of targets. */
+  moveDisabledReason?: string;
   busy: boolean;
   onViewDetails: (card: OwnedCard) => void;
   onMove: (card: OwnedCard, destId: string) => void;
@@ -21,7 +23,9 @@ interface Props {
  * Right-click menu for a card in the results. Built as a general action menu
  * so future card actions slot in as new sections.
  */
-export function CardContextMenu({ menu, locations, busy, onViewDetails, onMove, onClose }: Props) {
+export function CardContextMenu({
+  menu, locations, moveDisabledReason, busy, onViewDetails, onMove, onClose,
+}: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -63,10 +67,13 @@ export function CardContextMenu({ menu, locations, busy, onViewDetails, onMove, 
         <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
           Move to
         </p>
-        {targets.length === 0 && (
+        {moveDisabledReason && (
+          <p className="px-3 py-1.5 text-xs text-amber-400">{moveDisabledReason}</p>
+        )}
+        {!moveDisabledReason && targets.length === 0 && (
           <p className="px-3 py-1.5 text-xs text-zinc-500">No other locations</p>
         )}
-        {targets.map((l) => (
+        {!moveDisabledReason && targets.map((l) => (
           <button
             key={l.id}
             disabled={busy}
