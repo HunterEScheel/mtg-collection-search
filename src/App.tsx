@@ -419,6 +419,8 @@ function Main({ user }: { user: User }) {
         <EdhrecDialog
           locations={locations}
           cards={cards}
+          moveTargets={locations.filter((l) => l.user_id === user.id)}
+          onChanged={() => reload()}
           onSelectCard={setDetail}
           onClose={() => setEdhrec(false)}
         />

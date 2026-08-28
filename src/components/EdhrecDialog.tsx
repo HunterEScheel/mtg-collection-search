@@ -1,10 +1,16 @@
 import { useMemo, useState } from 'react';
 import type { Location, OwnedCard } from '../types';
 import { fetchEdhrecRecs, type EdhrecRec } from '../lib/edhrec';
+import { computeWrites, executeMove } from '../lib/move/executeMove';
+import { CardContextMenu, type CardMenuState } from './CardContextMenu';
 
 interface Props {
   locations: Location[];
   cards: OwnedCard[];
+  /** Locations the user owns — valid move targets for right-click moves. */
+  moveTargets: Location[];
+  /** Called after a move so the app refetches. */
+  onChanged: () => void;
   onSelectCard: (card: OwnedCard) => void;
   onClose: () => void;
 }
@@ -18,7 +24,9 @@ interface Hit {
  * EDHREC recommendations for one of your EDH locations' commanders,
  * intersected with a chosen source location (binder/box) to search.
  */
-export function EdhrecDialog({ locations, cards, onSelectCard, onClose }: Props) {
+export function EdhrecDialog({
+  locations, cards, moveTargets, onChanged, onSelectCard, onClose,
+}: Props) {
   const edhLocations = useMemo(
     () => locations.filter((l) => l.location_type === 'edh' && l.commander),
     [locations],
@@ -30,8 +38,32 @@ export function EdhrecDialog({ locations, cards, onSelectCard, onClose }: Props)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hits, setHits] = useState<Hit[] | null>(null);
+  const [menu, setMenu] = useState<CardMenuState | null>(null);
+  const [moveBusy, setMoveBusy] = useState(false);
 
   const deck = edhLocations.find((l) => l.id === deckId);
+
+  /** Move every owned variant of the hit's name out of the searched location. */
+  async function moveHit(card: OwnedCard, destId: string) {
+    setMoveBusy(true);
+    setError(null);
+    try {
+      const name = (card.scryfall?.name ?? card.card_name).toLowerCase();
+      const rows = cards.filter((r) =>
+        r.collection_id === card.collection_id
+        && (r.scryfall?.name ?? r.card_name).toLowerCase() === name);
+      const transfers = rows.map((r) => ({ sourceRow: r, qty: r.quantity }));
+      const destCards = cards.filter((r) => r.collection_id === destId);
+      await executeMove(computeWrites(transfers, destCards, destId));
+      setMenu(null);
+      setHits((h) => h?.filter((x) => x.card.id !== card.id) ?? null);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setMoveBusy(false);
+    }
+  }
 
   async function run() {
     setError(null);
@@ -127,6 +159,10 @@ export function EdhrecDialog({ locations, cards, onSelectCard, onClose }: Props)
                 <button
                   key={card.id}
                   onClick={() => onSelectCard(card)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setMenu({ card, x: e.clientX, y: e.clientY });
+                  }}
                   className="group relative text-left"
                   title={`${card.scryfall?.name ?? card.card_name} — ${rec.category}`}
                 >
@@ -152,6 +188,22 @@ export function EdhrecDialog({ locations, cards, onSelectCard, onClose }: Props)
               ))}
             </div>
           </>
+        )}
+
+        {menu && (
+          <CardContextMenu
+            menu={menu}
+            locations={moveTargets}
+            moveDisabledReason={
+              moveTargets.some((l) => l.id === menu.card.collection_id)
+                ? undefined
+                : 'Sale not confirmed yet — the seller must transfer this reservation before you can move its cards.'
+            }
+            busy={moveBusy}
+            onViewDetails={onSelectCard}
+            onMove={moveHit}
+            onClose={() => setMenu(null)}
+          />
         )}
       </div>
     </div>
