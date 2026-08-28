@@ -120,6 +120,34 @@ function Main({ user }: { user: User }) {
    * (foil/condition combined), so move every underlying variant row in the
    * same location/printing/language/binder group.
    */
+  /** Delete every variant row of a displayed entry (e.g. sold in person). */
+  async function deleteCard(card: OwnedCard) {
+    setMenuBusy(true);
+    setMenuError(null);
+    try {
+      const rows = cards.filter((r) =>
+        r.collection_id === card.collection_id
+        && r.scryfall_id === card.scryfall_id
+        && r.language === card.language
+        && r.binder_name === card.binder_name);
+      const { data, error } = await supabase
+        .from('collection_cards')
+        .delete()
+        .in('id', rows.map((r) => r.id))
+        .select('id');
+      if (error) throw new Error(error.message);
+      if ((data ?? []).length !== rows.length) {
+        throw new Error('Delete failed: you do not have permission to delete these cards.');
+      }
+      setCardMenu(null);
+      reload();
+    } catch (e) {
+      setMenuError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setMenuBusy(false);
+    }
+  }
+
   /** True when the card sits in a location reserved FOR this user (seller still owns it). */
   const isPendingSale = (card: OwnedCard) =>
     locations.some((l) => l.id === card.collection_id && l.user_id !== user.id);
@@ -441,6 +469,7 @@ function Main({ user }: { user: User }) {
           busy={menuBusy}
           onViewDetails={setDetail}
           onMove={moveCard}
+          onDelete={deleteCard}
           onClose={() => setCardMenu(null)}
         />
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Location, OwnedCard } from '../types';
 
 export interface CardMenuState {
@@ -16,6 +16,8 @@ interface Props {
   busy: boolean;
   onViewDetails: (card: OwnedCard) => void;
   onMove: (card: OwnedCard, destId: string) => void;
+  /** When provided, a Delete action appears (e.g. sold in person to someone without an account). */
+  onDelete?: (card: OwnedCard) => void;
   onClose: () => void;
 }
 
@@ -24,9 +26,10 @@ interface Props {
  * so future card actions slot in as new sections.
  */
 export function CardContextMenu({
-  menu, locations, moveDisabledReason, busy, onViewDetails, onMove, onClose,
+  menu, locations, moveDisabledReason, busy, onViewDetails, onMove, onDelete, onClose,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -83,6 +86,20 @@ export function CardContextMenu({
             {l.name}
           </button>
         ))}
+        {onDelete && !moveDisabledReason && (
+          <>
+            <div className="my-1 h-px bg-zinc-800" />
+            <button
+              disabled={busy}
+              onClick={() => (confirmDelete ? onDelete(menu.card) : setConfirmDelete(true))}
+              className="block w-full px-3 py-1.5 text-left text-red-400 hover:bg-red-950/40 disabled:opacity-40"
+            >
+              {confirmDelete
+                ? `Confirm: delete ×${menu.card.quantity}?`
+                : 'Delete from collection…'}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
