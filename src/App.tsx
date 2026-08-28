@@ -13,6 +13,7 @@ import { ResultsTable } from './components/ResultsTable';
 import { ImportDialog } from './components/ImportDialog';
 import { MoveDialog } from './components/MoveDialog';
 import { LocationsPage } from './components/LocationsPage';
+import { EdhrecDialog } from './components/EdhrecDialog';
 import { CardDetail } from './components/CardDetail';
 import { CardContextMenu, type CardMenuState } from './components/CardContextMenu';
 import { computeWrites, executeMove } from './lib/move/executeMove';
@@ -29,6 +30,7 @@ function Main({ user }: { user: User }) {
   const [importing, setImporting] = useState(false);
   const [moving, setMoving] = useState(false);
   const [page, setPage] = useState<'cards' | 'locations'>('cards');
+  const [edhrec, setEdhrec] = useState(false);
   const [detail, setDetail] = useState<OwnedCard | null>(null);
   const [showLegend, setShowLegend] = useState(false);
   const [cardMenu, setCardMenu] = useState<CardMenuState | null>(null);
@@ -177,6 +179,19 @@ function Main({ user }: { user: User }) {
             Locations
           </button>
         )}
+        {locations.length > 0 && (() => {
+          const hasEdh = locations.some((l) => l.location_type === 'edh' && l.commander);
+          return (
+            <button
+              onClick={() => setEdhrec(true)}
+              disabled={!hasEdh}
+              title={hasEdh ? undefined : 'Set a location\'s type to EDH (with a commander) on the Locations page first'}
+              className="rounded-md bg-zinc-800 px-3 py-1.5 text-sm font-medium ring-1 ring-zinc-700 hover:bg-zinc-700 disabled:opacity-40"
+            >
+              EDHREC
+            </button>
+          );
+        })()}
         {locations.length > 0 && (
           <button
             onClick={() => {
@@ -397,6 +412,15 @@ function Main({ user }: { user: User }) {
           cards={cards}
           onClose={() => setMoving(false)}
           onDone={() => reload()}
+        />
+      )}
+
+      {edhrec && (
+        <EdhrecDialog
+          locations={locations}
+          cards={cards}
+          onSelectCard={setDetail}
+          onClose={() => setEdhrec(false)}
         />
       )}
 

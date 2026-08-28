@@ -3,6 +3,10 @@ export interface Location {
   id: string;
   user_id: string;
   name: string;
+  /** 'edh' = a deck with a commander; 'collection' = a plain box/binder. */
+  location_type: 'edh' | 'collection';
+  /** Commander name — required when location_type is 'edh'. */
+  commander: string | null;
   /** Public share token; null = not shared. */
   share_id: string | null;
   /** Shared location is open for reservations. */

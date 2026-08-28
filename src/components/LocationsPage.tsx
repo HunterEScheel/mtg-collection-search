@@ -27,6 +27,22 @@ export function LocationsPage({ locations, cards, userId, onChanged, onBack }: P
   const [transferConfirmId, setTransferConfirmId] = useState<string | null>(null);
   const [mergingId, setMergingId] = useState<string | null>(null);
   const [mergeTargetId, setMergeTargetId] = useState('');
+  const [commanderEditId, setCommanderEditId] = useState<string | null>(null);
+  const [commanderValue, setCommanderValue] = useState('');
+
+  // Commander-eligible cards you own, suggested when marking a location EDH.
+  const commanderNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const c of cards) {
+      const type = (c.scryfall?.type_line ?? '').toLowerCase();
+      const oracle = (c.scryfall?.oracle_text ?? '').toLowerCase();
+      if ((type.includes('legendary') && type.includes('creature'))
+        || oracle.includes('can be your commander')) {
+        names.add(c.scryfall?.name ?? c.card_name);
+      }
+    }
+    return [...names].sort();
+  }, [cards]);
 
   const statsFor = useMemo(() => {
     const map = new Map<string, { rows: number; copies: number; value: number }>();
@@ -149,6 +165,49 @@ export function LocationsPage({ locations, cards, userId, onChanged, onBack }: P
     }
   }
 
+  /** Switch to 'collection' immediately; switching to 'edh' opens the commander input. */
+  async function setType(loc: Location, type: Location['location_type']) {
+    if (type === 'edh') {
+      setCommanderEditId(loc.id);
+      setCommanderValue(loc.commander ?? '');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase
+      .from('collections')
+      .update({ location_type: 'collection', commander: null })
+      .eq('id', loc.id);
+    setBusy(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setCommanderEditId(null);
+    onChanged();
+  }
+
+  async function saveCommander(loc: Location) {
+    const commander = commanderValue.trim();
+    if (!commander) {
+      setError('An EDH location needs a commander');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const { error } = await supabase
+      .from('collections')
+      .update({ location_type: 'edh', commander })
+      .eq('id', loc.id);
+    setBusy(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setCommanderEditId(null);
+    onChanged();
+  }
+
   async function saveRename(loc: Location) {
     const name = renameValue.trim();
     if (!name || name === loc.name) {
@@ -223,6 +282,11 @@ export function LocationsPage({ locations, cards, userId, onChanged, onBack }: P
                 ) : (
                   <>
                     <span className="min-w-0 truncate text-base font-medium">{loc.name}</span>
+                    {loc.location_type === 'edh' && (
+                      <span className="rounded-full bg-indigo-950/60 px-2 py-0.5 text-[10px] text-indigo-300 ring-1 ring-indigo-900">
+                        EDH{loc.commander ? ` — ${loc.commander}` : ''}
+                      </span>
+                    )}
                     {loc.reserved_from && (
                       <span className="rounded-full bg-amber-950/60 px-2 py-0.5 text-[10px] text-amber-400 ring-1 ring-amber-900">
                         reservation
@@ -244,6 +308,54 @@ export function LocationsPage({ locations, cards, userId, onChanged, onBack }: P
                   </>
                 )}
               </div>
+
+              {owned && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-zinc-500">type:</span>
+                  <select
+                    value={commanderEditId === loc.id ? 'edh' : loc.location_type}
+                    disabled={busy}
+                    onChange={(e) => setType(loc, e.target.value as Location['location_type'])}
+                    className="rounded bg-zinc-800 px-2 py-1 text-xs ring-1 ring-zinc-600"
+                  >
+                    <option value="collection">Collection</option>
+                    <option value="edh">EDH</option>
+                  </select>
+                  {commanderEditId === loc.id ? (
+                    <>
+                      <input
+                        autoFocus
+                        list="location-commanders"
+                        value={commanderValue}
+                        onChange={(e) => setCommanderValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveCommander(loc); }}
+                        placeholder="Commander (required)"
+                        className="min-w-0 flex-1 rounded bg-zinc-800 px-2 py-1 text-xs ring-1 ring-zinc-600"
+                      />
+                      <button
+                        onClick={() => saveCommander(loc)}
+                        disabled={busy || commanderValue.trim() === ''}
+                        className={`${actionClass} text-indigo-400 hover:text-indigo-300 disabled:opacity-40`}
+                      >
+                        save
+                      </button>
+                      <button
+                        onClick={() => setCommanderEditId(null)}
+                        className={`${actionClass} text-zinc-400 hover:text-zinc-200`}
+                      >
+                        cancel
+                      </button>
+                    </>
+                  ) : loc.location_type === 'edh' && (
+                    <button
+                      onClick={() => { setCommanderEditId(loc.id); setCommanderValue(loc.commander ?? ''); }}
+                      className={`${actionClass} text-zinc-400 hover:text-zinc-200`}
+                    >
+                      change commander
+                    </button>
+                  )}
+                </div>
+              )}
 
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-xs text-zinc-500">export:</span>
@@ -372,6 +484,10 @@ export function LocationsPage({ locations, cards, userId, onChanged, onBack }: P
           );
         })}
       </ul>
+
+      <datalist id="location-commanders">
+        {commanderNames.map((n) => <option key={n} value={n} />)}
+      </datalist>
 
       {deleting && (
         <DeleteLocationDialog
