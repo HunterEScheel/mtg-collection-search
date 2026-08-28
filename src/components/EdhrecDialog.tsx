@@ -40,13 +40,19 @@ export function EdhrecDialog({ locations, cards, onSelectCard, onClose }: Props)
     setBusy(true);
     try {
       const recs = await fetchEdhrecRecs(deck.commander);
+      // Skip recommendations the deck already contains.
+      const inDeck = new Set(
+        cards
+          .filter((c) => c.collection_id === deck.id)
+          .map((c) => (c.scryfall?.name ?? c.card_name).toLowerCase()),
+      );
       const seen = new Set<string>();
       const found: Hit[] = [];
       for (const c of cards) {
         if (c.collection_id !== locationId) continue;
         const name = (c.scryfall?.name ?? c.card_name);
         const key = name.toLowerCase();
-        if (seen.has(key)) continue;
+        if (seen.has(key) || inDeck.has(key)) continue;
         // EDHREC keys single faces sometimes — try full name then front face.
         const rec = recs.get(key) ?? recs.get(key.split('//')[0].trim());
         if (!rec) continue;
