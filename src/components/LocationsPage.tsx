@@ -228,6 +228,15 @@ export function LocationsPage({ locations, cards, userId, onChanged, onBack }: P
 
   const actionClass = 'text-xs underline';
 
+  // Sections: EDH decks, plain collections, and reservations (either carved
+  // out of one of your sale lists, or reserved for you by a seller).
+  const isReservation = (l: Location) => l.reserved_from !== null || l.user_id !== userId;
+  const sections: { title: string; list: Location[] }[] = [
+    { title: 'Decks', list: locations.filter((l) => !isReservation(l) && l.location_type === 'edh') },
+    { title: 'Collections', list: locations.filter((l) => !isReservation(l) && l.location_type !== 'edh') },
+    { title: 'Reservations', list: locations.filter(isReservation) },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -246,8 +255,11 @@ export function LocationsPage({ locations, cards, userId, onChanged, onBack }: P
 
       {error && <p className="text-sm text-red-400">{error}</p>}
 
+      {sections.map(({ title, list }) => list.length > 0 && (
+      <section key={title} className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</h3>
       <ul className="space-y-3">
-        {locations.map((loc) => {
+        {list.map((loc) => {
           const owned = loc.user_id === userId;
           const stats = statsFor(loc.id);
           return (
@@ -484,6 +496,8 @@ export function LocationsPage({ locations, cards, userId, onChanged, onBack }: P
           );
         })}
       </ul>
+      </section>
+      ))}
 
       <datalist id="location-commanders">
         {commanderNames.map((n) => <option key={n} value={n} />)}
