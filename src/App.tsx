@@ -51,6 +51,28 @@ function Main({ user }: { user: User }) {
   // display; the card detail still lists every variant separately.
   const displayResults = useMemo(() => groupVariants(results), [results]);
 
+  // Results split by the type of the location each card lives in.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const resultSections = useMemo(() => {
+    const locById = new Map(locations.map((l) => [l.id, l]));
+    const groups = { Decks: [] as OwnedCard[], Collections: [] as OwnedCard[], Reservations: [] as OwnedCard[] };
+    for (const c of displayResults) {
+      const loc = locById.get(c.collection_id);
+      if (loc && (loc.reserved_from !== null || loc.user_id !== user.id)) groups.Reservations.push(c);
+      else if (loc?.location_type === 'edh') groups.Decks.push(c);
+      else groups.Collections.push(c);
+    }
+    return (Object.entries(groups) as [string, OwnedCard[]][]).filter(([, list]) => list.length > 0);
+  }, [displayResults, locations, user.id]);
+
+  const toggleSection = (title: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(title)) next.delete(title);
+      else next.add(title);
+      return next;
+    });
+
   const ownedByName = useMemo(() => {
     const m = new Map<string, number>();
     for (const c of cards) {
@@ -406,21 +428,39 @@ function Main({ user }: { user: User }) {
             {displayResults.length} cards / {totals.copies} copies / ${totals.value.toFixed(2)}
           </p>
           <TokenTypesPanel cards={results} onSearch={setQuery} />
-          {view === 'grid' ? (
-            <ResultsGrid
-              cards={displayResults}
-              onSelect={onCardClick}
-              onContext={(card, e) => setCardMenu({ card, x: e.clientX, y: e.clientY })}
-              selected={deckMode ? deck : undefined}
-            />
-          ) : (
-            <ResultsTable
-              cards={displayResults}
-              onSelect={onCardClick}
-              onContext={(card, e) => setCardMenu({ card, x: e.clientX, y: e.clientY })}
-              selected={deckMode ? deck : undefined}
-            />
-          )}
+          {resultSections.map(([title, list]) => {
+            const open = !collapsed.has(title);
+            const copies = list.reduce((n, c) => n + c.quantity, 0);
+            return (
+              <section key={title} className="space-y-2">
+                <button
+                  onClick={() => toggleSection(title)}
+                  className="flex w-full items-center gap-2 rounded-md bg-zinc-900 px-3 py-2 text-left ring-1 ring-zinc-800 hover:bg-zinc-800"
+                >
+                  <span className="text-xs text-zinc-500">{open ? '▾' : '▸'}</span>
+                  <span className="text-sm font-semibold">{title}</span>
+                  <span className="text-xs text-zinc-500">
+                    {list.length} cards / {copies} copies
+                  </span>
+                </button>
+                {open && (view === 'grid' ? (
+                  <ResultsGrid
+                    cards={list}
+                    onSelect={onCardClick}
+                    onContext={(card, e) => setCardMenu({ card, x: e.clientX, y: e.clientY })}
+                    selected={deckMode ? deck : undefined}
+                  />
+                ) : (
+                  <ResultsTable
+                    cards={list}
+                    onSelect={onCardClick}
+                    onContext={(card, e) => setCardMenu({ card, x: e.clientX, y: e.clientY })}
+                    selected={deckMode ? deck : undefined}
+                  />
+                ))}
+              </section>
+            );
+          })}
         </>
       )}
       </>
