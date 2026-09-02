@@ -101,10 +101,24 @@ function Main({ user }: { user: User }) {
     return () => clearTimeout(t);
   }, [onlyMine, query, ownedByName]);
 
-  const locationNames = useMemo(
-    () => locations.map((l) => l.name).sort(),
-    [locations],
-  );
+  const locationGroups = useMemo(() => {
+    const isReservation = (l: (typeof locations)[number]) =>
+      l.reserved_from !== null || l.user_id !== user.id;
+    return [
+      {
+        title: 'Decks',
+        names: locations.filter((l) => !isReservation(l) && l.location_type === 'edh').map((l) => l.name).sort(),
+      },
+      {
+        title: 'Collections',
+        names: locations.filter((l) => !isReservation(l) && l.location_type !== 'edh').map((l) => l.name).sort(),
+      },
+      {
+        title: 'Reservations',
+        names: locations.filter(isReservation).map((l) => l.name).sort(),
+      },
+    ];
+  }, [locations, user.id]);
 
   const totals = useMemo(() => {
     const copies = results.reduce((n, c) => n + c.quantity, 0);
@@ -315,7 +329,7 @@ function Main({ user }: { user: User }) {
       </div>
 
       {onlyMine && (
-        <FilterBar filters={filters} onChange={setFilters} locationNames={locationNames} />
+        <FilterBar filters={filters} onChange={setFilters} locationGroups={locationGroups} />
       )}
 
       {deckMode && (
